@@ -25,7 +25,7 @@ Last updated: 2026-11-27
 | 6. Web foundation                                   | Done                  | Layout, Geist font, light/dark tokens, responsive shell, loading/error/not-found, reduced motion, `/status` page calling the API                              |
 | 7. Shared contracts                                 | Done                  | `@luminai/contracts`: error envelope and health schemas                                                                                                       |
 | 8. Test baseline                                    | Done                  | See below                                                                                                                                                     |
-| 9. CI                                               | Written               | `.github/workflows/ci.yml`. Green status depends on the first PR run                                                                                          |
+| 9. CI                                               | Done                  | `.github/workflows/ci.yml` is green on PR #1: lint, typecheck, unit, integration, build, Playwright and audit                                                 |
 | 10. Docs                                            | Done                  | README, `.env.example`, ADRs, this file                                                                                                                       |
 
 ### Test results (local run, 2026-11-27)
