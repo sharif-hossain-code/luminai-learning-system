@@ -41,6 +41,11 @@
       "dependsOn": ["^build"],
       "cache": false,
       "passThroughEnv": ["PLAYWRIGHT_*", "CI", "API_URL"]
+    },
+    "worker:dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
     }
   }
 }

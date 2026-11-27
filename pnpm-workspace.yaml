@@ -9,6 +9,8 @@ onlyBuiltDependencies:
   - sharp
   - unrs-resolver
   - esbuild
+  - argon2
+  - msgpackr-extract
 
 overrides:
   # GHSA-7589-6fvf-x4pw (ReDoS) in effect <=3.22.0, pulled in by @prisma/config 7.10.1.
