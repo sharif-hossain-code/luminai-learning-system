@@ -30,7 +30,7 @@ describe('API with healthy dependencies', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   it('GET /api/v1/health/live returns ok', async () => {
@@ -108,7 +108,7 @@ describe('API with Redis unavailable', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   it('reports degraded readiness with 503 and no connection details', async () => {
