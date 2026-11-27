@@ -131,6 +131,16 @@ export const API_ROUTES: ApiRoute[] = [
   },
   {
     method: 'POST',
+    path: '/auth/sessions/revoke-others',
+    operationId: 'revokeOtherSessions',
+    summary: 'Sign out of every session except this one',
+    tag: 'Auth',
+    auth: 'session',
+    success: { status: 204 },
+    errors: [401, 403],
+  },
+  {
+    method: 'POST',
     path: '/auth/forgot-password',
     operationId: 'forgotPassword',
     summary: 'Send a password reset link if the account exists (always 202)',

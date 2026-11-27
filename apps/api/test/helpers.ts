@@ -66,10 +66,16 @@ export function call(
   app: NestFastifyApplication,
   method: Method,
   path: string,
-  options: { body?: unknown; cookie?: string; headers?: Record<string, string> } = {},
+  options: {
+    body?: unknown;
+    cookie?: string;
+    headers?: Record<string, string>;
+    remoteAddress?: string;
+  } = {},
 ) {
   return app.inject({
     method,
+    ...(options.remoteAddress ? { remoteAddress: options.remoteAddress } : {}),
     url: `/api/v1${path}`,
     headers: {
       ...(method === 'GET' ? {} : { [CSRF_HEADER]: CSRF_HEADER_VALUE, origin: WEB_ORIGIN }),

@@ -61,7 +61,7 @@ export class AuthService {
    */
   async register(input: RegisterRequest, meta: RequestMeta): Promise<void> {
     const email = normalizeEmail(input.email);
-    const policy = checkPasswordPolicy(input.password, email);
+    const policy = checkPasswordPolicy(input.password, email, input.displayName);
     if (!policy.ok) throw weakPassword(policy.message ?? 'Choose a stronger password.', 'password');
 
     const existing = await this.prisma.client.user.findUnique({
@@ -245,6 +245,18 @@ export class AuthService {
     });
   }
 
+  async logoutOthers(userId: string, currentSessionId: string, meta: RequestMeta): Promise<void> {
+    const count = await this.sessions.revokeAll(userId, { except: currentSessionId });
+    await this.audit.record({
+      action: 'auth.logout_others',
+      actorUserId: userId,
+      resourceType: 'user',
+      resourceId: userId,
+      metadata: { sessions: count },
+      ip: meta.ip,
+    });
+  }
+
   async revokeSession(userId: string, sessionId: string, meta: RequestMeta): Promise<void> {
     // Scoped to the owner: another user's session ID behaves exactly like a missing one.
     if (!(await this.sessions.revoke(sessionId, userId))) {
@@ -337,7 +349,12 @@ export class AuthService {
   ): Promise<SignedIn> {
     const user = await this.prisma.client.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { id: true, email: true, passwordHash: true },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        profile: { select: { displayName: true } },
+      },
     });
     if (!(await this.hasher.verify(user.passwordHash, currentPassword))) {
       throw new AppError(
@@ -347,7 +364,7 @@ export class AuthService {
         [{ field: 'currentPassword', message: 'Your current password is incorrect.' }],
       );
     }
-    const policy = checkPasswordPolicy(newPassword, user.email);
+    const policy = checkPasswordPolicy(newPassword, user.email, user.profile?.displayName);
     if (!policy.ok)
       throw weakPassword(policy.message ?? 'Choose a stronger password.', 'newPassword');
     const passwordHash = await this.hasher.hash(newPassword);

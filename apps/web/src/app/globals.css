@@ -1,95 +1,204 @@
 @import 'tailwindcss';
 
 /*
- * Design tokens: docs/design-system/tokens.md is the source of truth.
- * Light is the default theme; dark applies when <html data-theme="dark">.
- * Components use the semantic Tailwind names below (bg-canvas, text-fg, ...),
- * never raw hex values.
+ * Design tokens. Source of truth: the Figma file (variables and styles), exported to
+ * docs/design-system/tokens.md. Light is the default theme; dark applies when
+ * <html data-theme="dark">. Components use the semantic Tailwind names below
+ * (bg-canvas, text-fg, border-default, ...), never raw hex values.
  */
 
 :root {
   color-scheme: light;
 
+  /* brand */
+  /* The logo tile keeps the same blue in both themes. */
+  --brand-mark: #2563eb;
   --brand-primary: #2563eb;
+  --brand-primary-hover: #1d4ed8;
+  --brand-primary-strong: #1e4fc2;
+  --brand-primary-subtle: #e8effd;
+  --brand-primary-soft: #d6e2fc;
   --brand-primary-fg: #ffffff;
   --brand-secondary: #7c3aed;
+  --brand-secondary-strong: #5b21b6;
+  --brand-secondary-subtle: #f1eafe;
+
+  /* backgrounds */
   --bg-canvas: #f5f7fb;
   --bg-surface: #ffffff;
+  --bg-surface-raised: #fbfcff;
+  --bg-muted: #f1f5f9;
+  --bg-segmented: #e9eef5;
+  --bg-hover: #eef2f8;
+  --bg-inverse: #172033;
   --bg-elevated: rgb(255 255 255 / 0.72);
+
+  /* text */
   --text-primary: #172033;
-  /* Spec value #64748B is 4.44:1 on canvas (below WCAG AA); darkened to pass. */
-  --text-secondary: #5b6b82;
+  --text-secondary: #4a5a70;
+  --text-tertiary: #5a6a80;
+  --text-nav: #3b4a61;
+  --text-on-inverse: #ffffff;
+  --text-on-inverse-muted: #c5cfdd;
+  --text-on-inverse-accent: #60a5fa;
+  --text-on-inverse-link: #93c5fd;
+  /* Figma #94A3B8 is 2.56:1 on white; darkened to pass AA. */
+  --text-placeholder: #64748b;
+
+  /* borders */
   --border-subtle: #e2e8f0;
+  --border-default: #cbd5e1;
   --glass-border: rgb(255 255 255 / 0.58);
+  --focus-ring: #2563eb;
+  --focus-halo: #c7d7fa;
+
+  /* state */
   --state-success: #16a34a;
   --state-success-text: #15803d;
+  /* Figma #E6F6EC gives 4.48:1 with success text; lightened to pass AA. */
+  --state-success-subtle: #edf8f1;
   --state-warning: #d97706;
   --state-warning-text: #b45309;
+  --state-warning-subtle: #fef3e2;
   --state-danger: #dc2626;
-  --state-danger-text: #dc2626;
-  --focus-ring: #2563eb;
+  --state-danger-text: #b91c1c;
+  --state-danger-subtle: #feecec;
+
+  /* domain accents */
+  --domain-language: #2563eb;
+  --domain-language-subtle: #e8effd;
+  --domain-communication: #0e7490;
+  --domain-communication-subtle: #e6f2f7;
+  --domain-leadership: #7c3aed;
+  --domain-leadership-subtle: #f1eafe;
+
   --shadow-soft: 0 12px 36px rgb(15 23 42 / 0.08);
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.08);
 }
 
 [data-theme='dark'] {
   color-scheme: dark;
 
   --brand-primary: #60a5fa;
+  --brand-primary-hover: #3b82f6;
+  --brand-primary-strong: #93c5fd;
+  --brand-primary-subtle: #1a2747;
+  --brand-primary-soft: #22325a;
   --brand-primary-fg: #0b1220;
   --brand-secondary: #a78bfa;
+  --brand-secondary-strong: #c4b5fd;
+  --brand-secondary-subtle: #2a1f47;
+
   --bg-canvas: #0b1220;
   --bg-surface: #111b2e;
+  --bg-surface-raised: #16223a;
+  --bg-muted: #1a2538;
+  --bg-segmented: #1a2538;
+  --bg-hover: #1a2538;
+  --bg-inverse: #020617;
   --bg-elevated: rgb(23 32 51 / 0.72);
+
   --text-primary: #f8fafc;
   --text-secondary: #a8b4c7;
-  --border-subtle: rgb(255 255 255 / 0.12);
+  --text-tertiary: #94a3b8;
+  --text-nav: #cbd5e1;
+  --text-on-inverse-muted: #a8b4c7;
+  --text-placeholder: #8391a7;
+
+  --border-subtle: #24324a;
+  --border-default: #334155;
   --glass-border: rgb(255 255 255 / 0.12);
-  --state-success: #4ade80;
-  --state-success-text: #4ade80;
-  --state-warning: #fbbf24;
-  --state-warning-text: #fbbf24;
-  --state-danger: #f87171;
-  --state-danger-text: #f87171;
   --focus-ring: #60a5fa;
+  --focus-halo: rgb(96 165 250 / 0.35);
+
+  --state-success: #22c55e;
+  --state-success-text: #4ade80;
+  --state-success-subtle: #0f2a1c;
+  --state-warning: #f59e0b;
+  --state-warning-text: #fbbf24;
+  --state-warning-subtle: #2e2010;
+  --state-danger: #f87171;
+  --state-danger-text: #fca5a5;
+  --state-danger-subtle: #2e1414;
+
+  --domain-language: #60a5fa;
+  --domain-language-subtle: #1a2747;
+  --domain-communication: #22d3ee;
+  --domain-communication-subtle: #0b2530;
+  --domain-leadership: #a78bfa;
+  --domain-leadership-subtle: #2a1f47;
+
   --shadow-soft: 0 12px 36px rgb(0 0 0 / 0.35);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
 }
 
 @theme inline {
   --font-sans:
-    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, 'SFMono-Regular', monospace;
+    'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
+  --color-brand-mark: var(--brand-mark);
   --color-primary: var(--brand-primary);
+  --color-primary-hover: var(--brand-primary-hover);
+  --color-primary-strong: var(--brand-primary-strong);
+  --color-primary-subtle: var(--brand-primary-subtle);
+  --color-primary-soft: var(--brand-primary-soft);
   --color-primary-fg: var(--brand-primary-fg);
   --color-secondary: var(--brand-secondary);
+  --color-secondary-subtle: var(--brand-secondary-subtle);
   --color-canvas: var(--bg-canvas);
   --color-surface: var(--bg-surface);
+  --color-surface-raised: var(--bg-surface-raised);
+  --color-muted: var(--bg-muted);
+  --color-segmented: var(--bg-segmented);
+  --color-hover: var(--bg-hover);
+  --color-inverse: var(--bg-inverse);
   --color-elevated: var(--bg-elevated);
   --color-fg: var(--text-primary);
   --color-fg-muted: var(--text-secondary);
+  --color-fg-subtle: var(--text-tertiary);
+  --color-fg-nav: var(--text-nav);
+  --color-on-inverse: var(--text-on-inverse);
+  --color-on-inverse-muted: var(--text-on-inverse-muted);
+  --color-on-inverse-accent: var(--text-on-inverse-accent);
+  --color-on-inverse-link: var(--text-on-inverse-link);
+  --color-placeholder: var(--text-placeholder);
   --color-subtle: var(--border-subtle);
+  --color-default: var(--border-default);
+  --color-focus-halo: var(--focus-halo);
   --color-success: var(--state-success);
   --color-success-text: var(--state-success-text);
+  --color-success-subtle: var(--state-success-subtle);
   --color-warning: var(--state-warning);
   --color-warning-text: var(--state-warning-text);
+  --color-warning-subtle: var(--state-warning-subtle);
   --color-danger: var(--state-danger);
   --color-danger-text: var(--state-danger-text);
+  --color-danger-subtle: var(--state-danger-subtle);
+  --color-domain-language: var(--domain-language);
+  --color-domain-language-subtle: var(--domain-language-subtle);
+  --color-domain-communication: var(--domain-communication);
+  --color-domain-communication-subtle: var(--domain-communication-subtle);
+  --color-domain-leadership: var(--domain-leadership);
+  --color-domain-leadership-subtle: var(--domain-leadership-subtle);
 
-  /* Type scale (size / line height) from the design spec. */
-  --text-display: 2.25rem;
-  --text-display--line-height: 2.75rem;
-  --text-h1: 1.875rem;
-  --text-h1--line-height: 2.375rem;
+  /* Type scale (size / line height) from the Figma text styles. */
+  --text-display: 2.5rem;
+  --text-display--line-height: 3rem;
+  --text-h1: 1.75rem;
+  --text-h1--line-height: 2.25rem;
   --text-h2: 1.5rem;
   --text-h2--line-height: 2rem;
-  --text-h3: 1.25rem;
-  --text-h3--line-height: 1.75rem;
-  --text-body: 1rem;
+  --text-h3: 1.125rem;
+  --text-h3--line-height: 1.625rem;
+  --text-body: 0.9375rem;
   --text-body--line-height: 1.5rem;
   --text-support: 0.875rem;
   --text-support--line-height: 1.25rem;
-  --text-caption: 0.75rem;
-  --text-caption--line-height: 1rem;
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.125rem;
+  --text-overline: 0.75rem;
+  --text-overline--line-height: 1rem;
 
   /* Radius tokens: 8, 12, 16, 20, 24px. */
   --radius-sm: 0.5rem;
@@ -99,6 +208,7 @@
   --radius-2xl: 1.5rem;
 
   --shadow-soft: var(--shadow-soft);
+  --shadow-xs: var(--shadow-sm);
   --container-content: 80rem;
 }
 
@@ -119,6 +229,11 @@
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
+
+  ::placeholder {
+    color: var(--text-placeholder);
+    opacity: 1;
+  }
 }
 
 @layer components {
@@ -137,6 +252,41 @@
       -webkit-backdrop-filter: blur(16px);
       backdrop-filter: blur(16px);
     }
+  }
+
+  /* Form controls: brand border plus a 3px halo on focus, as in the design. */
+  .field-control {
+    width: 100%;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    padding: 0 0.875rem;
+    font-size: var(--text-body);
+    transition:
+      border-color 120ms,
+      box-shadow 120ms;
+  }
+
+  .field-control:focus,
+  .field-control:focus-visible {
+    outline: none;
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 3px var(--focus-halo);
+  }
+
+  .field-control[aria-invalid='true'] {
+    border-color: var(--state-danger);
+  }
+
+  .field-control[aria-invalid='true']:focus {
+    box-shadow: 0 0 0 3px var(--state-danger-subtle);
+  }
+
+  .field-control:disabled,
+  .field-control[readonly] {
+    background: var(--bg-muted);
+    color: var(--text-secondary);
   }
 }
 

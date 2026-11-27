@@ -130,6 +130,12 @@ export class AuthController {
     clearSessionCookie(reply, this.config);
   }
 
+  @Post('sessions/revoke-others')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async revokeOtherSessions(@CurrentAuth() auth: AuthContext, @Req() request: FastifyRequest) {
+    await this.auth.logoutOthers(auth.userId, auth.sessionId, meta(request));
+  }
+
   @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.ACCEPTED)

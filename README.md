@@ -33,8 +33,8 @@ pnpm install
 # Use the same passwords in POSTGRES_PASSWORD/REDIS_PASSWORD and in the URLs.
 cp .env.example .env          # Windows PowerShell: Copy-Item .env.example .env
 
-docker compose up -d          # start PostgreSQL and Redis
-docker compose ps             # both should show "healthy"
+docker compose up -d          # start PostgreSQL, Redis and Mailpit (local email inbox)
+docker compose ps             # all three should show "healthy"
 
 pnpm db:migrate               # apply migrations to the development database
 pnpm db:seed                  # create the LEARNER, CONTENT_EDITOR and ADMIN roles (safe to re-run)
@@ -52,9 +52,16 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 pnpm dev
 ```
 
-- Web: http://localhost:3000. The **System status** page shows whether the web app can reach the API.
-- API liveness: http://localhost:4000/api/v1/health/live
-- API readiness: http://localhost:4000/api/v1/health/ready
+`pnpm dev` starts three processes: the web app, the API and the background worker (which sends emails).
+
+- Web: http://localhost:3000. Create an account at `/sign-up`. The **System status** page shows whether the web app can reach the API.
+- Email: verification and password-reset emails land in Mailpit at http://localhost:8025. Nothing leaves your machine.
+- API docs: http://localhost:4000/api/v1/openapi.json (OpenAPI 3.1, not served in production).
+- API liveness / readiness: http://localhost:4000/api/v1/health/live and `/health/ready`
+
+The browser only talks to the web app: `/api/v1/*` on port 3000 is proxied to the API (`API_URL`), so the session cookie is first-party. See `docs/security/web-security.md`.
+
+To make yourself an admin locally, sign up, then run `pnpm --filter @luminai/database exec prisma studio` and change your user's role to `ADMIN`.
 
 ## Everyday commands
 
@@ -66,13 +73,13 @@ pnpm dev
 | `pnpm typecheck`                    | TypeScript in strict mode everywhere                                                |
 | `pnpm test`                         | Unit tests                                                                          |
 | `pnpm test:integration`             | Integration tests against the test database (`TEST_DATABASE_URL`) and Redis         |
-| `pnpm test:e2e`                     | Playwright smoke tests on desktop and mobile viewports (run `pnpm build` first)     |
+| `pnpm test:e2e`                     | Playwright end-to-end tests on desktop and mobile (run `pnpm build` first)          |
 | `pnpm format` / `pnpm format:check` | Prettier                                                                            |
 | `pnpm db:migrate`                   | Create and apply a migration after editing `packages/database/prisma/schema.prisma` |
 | `pnpm db:migrate:deploy`            | Apply committed migrations without creating new ones (CI and deployments)           |
 | `pnpm db:seed`                      | Seed reference data                                                                 |
 
-Before the first `pnpm test:e2e`, install the browser once: `pnpm --filter @luminai/web exec playwright install chromium`.
+Before the first `pnpm test:e2e`, install the browser once: `pnpm --filter @luminai/web exec playwright install chromium`. The suite starts its own API (port 4100, against `TEST_DATABASE_URL`), a test mail sink and the web app (port 3100), so don't run it at the same time as `pnpm test:integration`.
 
 ## Troubleshooting
 
@@ -84,6 +91,7 @@ Before the first `pnpm test:e2e`, install the browser once: `pnpm --filter @lumi
 | Readiness returns 503 with `redis: down`                 | Check `docker compose logs redis` and that the password in `REDIS_URL` matches `REDIS_PASSWORD`                                                                                                                                                                          |
 | Port 5432 or 6379 already in use                         | Stop the other service, or change `POSTGRES_PORT`/`REDIS_PORT` and the matching URLs in `.env`                                                                                                                                                                           |
 | Integration tests refuse to run                          | `TEST_DATABASE_URL` must point to a database whose name contains `test`. The `luminai_test` database is created the first time the Postgres container starts; if you created the volume before this, run `docker compose exec postgres createdb -U luminai luminai_test` |
+| No email arrives                                         | Check Mailpit at http://localhost:8025 and that the worker is running (`pnpm dev` starts it). `SMTP_URL` must be `smtp://localhost:1025`                                                                                                                                 |
 | Changed the Postgres password after first start          | The volume keeps the old one. Reset local data with `docker compose down -v` (this deletes local databases)                                                                                                                                                              |
 
 ## Contributing

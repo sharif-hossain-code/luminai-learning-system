@@ -12,6 +12,7 @@ export type AuditAction =
   | 'auth.login_failed'
   | 'auth.logout'
   | 'auth.logout_all'
+  | 'auth.logout_others'
   | 'auth.session_revoked'
   | 'auth.password_reset_requested'
   | 'auth.password_reset'

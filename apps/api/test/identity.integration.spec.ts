@@ -221,6 +221,17 @@ describe('sign-in and sessions', () => {
     expect((await call(t.app, 'GET', '/users/me', { cookie: second })).statusCode).toBe(401);
   });
 
+  it('revoke-others keeps this session and signs out the rest', async () => {
+    const { email, cookie } = await signedInLearner(t, 'revokeothers');
+    const second = sessionCookieFrom(
+      await call(t.app, 'POST', '/auth/login', { body: { email, password: STRONG_PASSWORD } }),
+    );
+    const res = await call(t.app, 'POST', '/auth/sessions/revoke-others', { cookie });
+    expect(res.statusCode).toBe(204);
+    expect((await call(t.app, 'GET', '/users/me', { cookie })).statusCode).toBe(200);
+    expect((await call(t.app, 'GET', '/users/me', { cookie: second })).statusCode).toBe(401);
+  });
+
   it("lists my sessions and lets me revoke one, but not someone else's", async () => {
     const a = await signedInLearner(t, 'sessa');
     const b = await signedInLearner(t, 'sessb');
