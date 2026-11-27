@@ -1,0 +1,105 @@
+// Luminai Learning System: database schema.
+// Conventions (docs/database): UUID primary keys, timestamptz in UTC,
+// snake_case tables and columns, explicit lifecycle status fields.
+// Every change goes through a migration: `pnpm db:migrate`.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoleCode {
+  LEARNER
+  CONTENT_EDITOR
+  ADMIN
+
+  @@map("role_code")
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DELETED
+
+  @@map("user_status")
+}
+
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        RoleCode @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId          String     @map("role_id") @db.Uuid
+  /// Stored normalized (trimmed, lower-case). A CHECK constraint in the
+  /// migration enforces this, so the unique index is case-insensitive.
+  email           String     @unique
+  passwordHash    String     @map("password_hash")
+  status          UserStatus @default(PENDING_VERIFICATION)
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz(3)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  role     Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  profile  UserProfile?
+  sessions Session[]
+
+  @@index([roleId])
+  @@map("users")
+}
+
+model UserProfile {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @unique @map("user_id") @db.Uuid
+  displayName     String?  @map("display_name")
+  /// BCP 47 language tag, e.g. "en" or "en-GB".
+  locale          String   @default("en")
+  /// IANA time zone name, e.g. "Asia/Dhaka".
+  timezone        String   @default("UTC")
+  /// Selected domains: "language", "communication", "leadership".
+  learningGoals   String[] @default([]) @map("learning_goals")
+  avatarObjectKey String?  @map("avatar_object_key")
+  /// Flexible, validated-in-code preferences (self-assessed levels, practice frequency).
+  preferences     Json     @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model Session {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  /// SHA-256 hash of the opaque session token. The raw token is never stored.
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  /// Coarse device description (browser and OS family) for the session list.
+  userAgent  String?   @map("user_agent")
+  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
