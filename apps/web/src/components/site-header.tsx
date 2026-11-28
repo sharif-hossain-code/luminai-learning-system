@@ -8,8 +8,9 @@ import { Logo } from './logo';
 import { ButtonLink } from './ui/button';
 import { ThemeToggle } from './theme-toggle';
 
-// Placeholder navigation until the learner app exists (see the design spec's navigation model).
+// Public navigation (see the design spec's navigation model).
 const NAV_ITEMS = [
+  { href: '/courses', label: 'Courses' },
   { href: '/#domains', label: 'Learning domains' },
   { href: '/#mentor', label: 'AI mentor' },
   { href: '/status', label: 'System status' },

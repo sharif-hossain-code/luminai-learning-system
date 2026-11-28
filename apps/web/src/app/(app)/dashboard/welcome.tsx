@@ -1,12 +1,12 @@
 'use client';
 
-import { BookOpen } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useCurrentUser } from '@/components/app/user-context';
 import { ButtonLink } from '@/components/ui/button';
 import { DOMAIN_OPTIONS } from '@/lib/learning-options';
 
-/** Placeholder until the learner dashboard is built with the course catalogue (Phase 3+). */
-export function Welcome() {
+/** Placeholder dashboard until enrolment and progress arrive (Phase 4). */
+export function Welcome({ children }: { children?: ReactNode }) {
   const user = useCurrentUser();
   const firstName = user.profile.displayName?.split(' ')[0];
   const goals = DOMAIN_OPTIONS.filter((domain) =>
@@ -14,7 +14,7 @@ export function Welcome() {
   );
 
   return (
-    <>
+    <div className="w-full max-w-[1000px]">
       <h1 className="text-[2rem] leading-10 font-semibold">
         {firstName ? `Welcome, ${firstName}` : 'Welcome to Luminai'}
       </h1>
@@ -55,16 +55,7 @@ export function Welcome() {
         </ButtonLink>
       </section>
 
-      <section className="mt-6 flex items-start gap-4 rounded-xl border border-dashed border-default p-6">
-        <BookOpen aria-hidden className="mt-0.5 size-6 shrink-0 text-fg-subtle" />
-        <div>
-          <h2 className="text-h3 font-semibold">Courses are on the way</h2>
-          <p className="mt-1 text-support text-fg-muted">
-            The course catalogue opens in the next release. We&apos;ll use your goals to suggest
-            where to start.
-          </p>
-        </div>
-      </section>
-    </>
+      {children}
+    </div>
   );
 }

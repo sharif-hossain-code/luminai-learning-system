@@ -1,5 +1,6 @@
 import { BookOpen, MessageSquareText, Sparkles, Users } from 'lucide-react';
 import { Container } from '@/components/container';
+import { ButtonLink } from '@/components/ui/button';
 
 const DOMAINS = [
   {
@@ -35,8 +36,16 @@ export default function HomePage() {
           </h1>
           <p className="mt-4 max-w-2xl text-body text-fg-muted">
             Structured courses, practice you can measure, and a mentor that knows what you&apos;re
-            learning. Courses open soon.
+            learning.
           </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <ButtonLink href="/courses" size="lg">
+              Explore courses
+            </ButtonLink>
+            <ButtonLink href="/sign-up" size="lg" variant="secondary">
+              Create a free account
+            </ButtonLink>
+          </div>
         </Container>
       </section>
 

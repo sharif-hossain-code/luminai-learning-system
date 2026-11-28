@@ -1,5 +1,5 @@
 import { createPrismaClient } from '../src/client.js';
-import { seedRoles } from '../src/seed-data.js';
+import { seedCategories, seedRoles } from '../src/seed-data.js';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -10,8 +10,9 @@ const prisma = createPrismaClient({ connectionString, maxConnections: 1 });
 
 try {
   await seedRoles(prisma);
-  const count = await prisma.role.count();
-  console.log(`Seed complete: ${count} roles present.`);
+  await seedCategories(prisma);
+  const [roles, categories] = await Promise.all([prisma.role.count(), prisma.category.count()]);
+  console.log(`Seed complete: ${roles} roles and ${categories} categories present.`);
 } finally {
   await prisma.$disconnect();
 }

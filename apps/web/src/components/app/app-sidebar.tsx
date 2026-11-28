@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutGrid, LogOut, Menu, Settings, X } from 'lucide-react';
+import { Compass, LayoutGrid, LogOut, Menu, PenSquare, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useId, useState } from 'react';
@@ -10,8 +10,14 @@ import { apiFetch } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { initials, useCurrentUser } from './user-context';
 
-// Course, practice, mentor and assessment pages join this list in later phases.
-const NAV = [{ href: '/dashboard', label: 'Dashboard', icon: LayoutGrid }];
+// My learning, practice, mentor and assessment pages join this list in later phases.
+const NAV = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
+  { href: '/courses', label: 'Explore courses', icon: Compass },
+];
+
+/** Shown to content editors and administrators only (the API enforces access). */
+const STUDIO = { href: '/studio', label: 'Course studio', icon: PenSquare };
 
 function NavLink({
   href,
@@ -69,6 +75,7 @@ export function AppSidebar() {
         {NAV.map((item) => (
           <NavLink key={item.href} {...item} onNavigate={close} />
         ))}
+        {user.role !== 'LEARNER' ? <NavLink {...STUDIO} onNavigate={close} /> : null}
       </nav>
       <div className="mt-auto flex flex-col gap-1 pt-6">
         <NavLink href="/settings" label="Profile & settings" icon={Settings} onNavigate={close} />

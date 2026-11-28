@@ -22,6 +22,9 @@ export const ErrorCode = {
   TOKEN_INVALID: 'TOKEN_INVALID',
   WEAK_PASSWORD: 'WEAK_PASSWORD',
   CSRF_CHECK_FAILED: 'CSRF_CHECK_FAILED',
+  // Content-specific codes.
+  /** fieldErrors list what to fix; `field` is the issue path (course.summary, lesson:<id> ...). */
+  PUBLISH_VALIDATION_FAILED: 'PUBLISH_VALIDATION_FAILED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

@@ -3,6 +3,7 @@ import {
   createPrismaClient,
   Prisma,
   RoleCode,
+  seedCategories,
   seedRoles,
   type PrismaClient,
 } from '../src/index.js';
@@ -16,6 +17,7 @@ beforeAll(() => {
 });
 
 afterAll(async () => {
+  await prisma.course.deleteMany();
   await prisma.user.deleteMany();
   await prisma.$disconnect();
 });
@@ -95,5 +97,82 @@ describe('users table integrity', () => {
       data: { email: 'restrict@example.test', passwordHash: 'hash', roleId },
     });
     await expect(prisma.role.delete({ where: { id: roleId } })).rejects.toThrow();
+  });
+});
+
+describe('course content integrity', () => {
+  async function course(slug: string) {
+    await seedRoles(prisma);
+    await seedCategories(prisma);
+    const roleId = (await prisma.role.findUniqueOrThrow({ where: { code: RoleCode.ADMIN } })).id;
+    const owner = await prisma.user.create({
+      data: { email: `${slug}@example.test`, passwordHash: 'hash', roleId },
+    });
+    const category = await prisma.category.findUniqueOrThrow({ where: { slug: 'language' } });
+    return prisma.course.create({
+      data: { slug, title: 'Course', categoryId: category.id, ownerId: owner.id },
+    });
+  }
+
+  it('seeds the three domain categories idempotently', async () => {
+    await seedCategories(prisma);
+    await seedCategories(prisma);
+    const slugs = (await prisma.category.findMany({ orderBy: { displayOrder: 'asc' } })).map(
+      (c) => c.slug,
+    );
+    expect(slugs).toEqual(['language', 'communication', 'leadership']);
+  });
+
+  it('enforces unique, well-formed slugs', async () => {
+    await course('unique-course');
+    await expect(course('unique-course')).rejects.toThrow();
+    await expect(course('Not A Slug')).rejects.toThrow();
+  });
+
+  it('allows only https links and exactly one location per resource', async () => {
+    const created = await course('resource-course');
+    const module = await prisma.module.create({
+      data: { courseId: created.id, title: 'M', position: 0 },
+    });
+    const lesson = await prisma.lesson.create({
+      data: { moduleId: module.id, title: 'L', position: 0 },
+    });
+    const base = { lessonId: lesson.id, type: 'LINK' as const, title: 'R', position: 0 };
+    await expect(
+      prisma.lessonResource.create({ data: { ...base, externalUrl: 'javascript:alert(1)' } }),
+    ).rejects.toThrow();
+    await expect(prisma.lessonResource.create({ data: base })).rejects.toThrow();
+    await expect(
+      prisma.lessonResource.create({
+        data: { ...base, externalUrl: 'https://example.com', storageKey: 'key' },
+      }),
+    ).rejects.toThrow();
+    await prisma.lessonResource.create({ data: { ...base, externalUrl: 'https://example.com' } });
+  });
+
+  it('numbers versions uniquely per course and fills the search vector', async () => {
+    const created = await course('versioned-course');
+    const version = {
+      courseId: created.id,
+      categoryId: created.categoryId,
+      title: 'Negotiation basics',
+      summary: 'Reach fair agreements',
+      level: 'BEGINNER' as const,
+      estimatedMinutes: 60,
+      moduleCount: 1,
+      lessonCount: 1,
+      searchText: 'bargaining',
+      snapshot: {},
+      draftRevision: 1,
+    };
+    await prisma.courseVersion.create({ data: { ...version, version: 1 } });
+    await expect(prisma.courseVersion.create({ data: { ...version, version: 1 } })).rejects.toThrow(
+      Prisma.PrismaClientKnownRequestError,
+    );
+    const hits = await prisma.$queryRaw<{ n: bigint }[]>`
+      SELECT count(*) AS n FROM course_versions
+      WHERE course_id = ${created.id}::uuid
+        AND search_vector @@ websearch_to_tsquery('english', 'bargain')`;
+    expect(Number(hits[0]?.n)).toBe(1);
   });
 });

@@ -1,8 +1,22 @@
 export { createPrismaClient, type CreatePrismaClientOptions } from './client.js';
 export { PrismaClient, Prisma } from './generated/prisma/client.js';
-export { RoleCode, UserStatus } from './generated/prisma/enums.js';
+export {
+  CourseLevel,
+  CourseStatus,
+  LessonCompletionRule,
+  LessonResourceType,
+  LessonType,
+  RoleCode,
+  UserStatus,
+} from './generated/prisma/enums.js';
 export type {
   AuditEvent,
+  Category,
+  Course,
+  CourseVersion,
+  Lesson,
+  LessonResource,
+  Module,
   EmailVerificationToken,
   PasswordResetToken,
   Role,
@@ -10,4 +24,4 @@ export type {
   User,
   UserProfile,
 } from './generated/prisma/client.js';
-export { ROLE_DEFINITIONS, seedRoles } from './seed-data.js';
+export { CATEGORY_DEFINITIONS, ROLE_DEFINITIONS, seedCategories, seedRoles } from './seed-data.js';

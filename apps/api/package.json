@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "worker:dev": "nest start --watch --entryFile worker --exec \"node --env-file-if-exists=../../.env --enable-source-maps\"",
-    "worker:start": "node --enable-source-maps dist/worker.js"
+    "worker:start": "node --enable-source-maps dist/worker.js",
+    "seed:demo": "node --env-file-if-exists=../../.env --enable-source-maps dist/scripts/seed-demo-courses.js"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.5",

@@ -31,3 +31,36 @@ export async function seedRoles(prisma: PrismaClient): Promise<void> {
     });
   }
 }
+
+/** The three learning domains are the first catalogue categories. Admins can add more. */
+export const CATEGORY_DEFINITIONS = [
+  {
+    slug: 'language',
+    name: 'Language',
+    description: 'Grammar, vocabulary, writing, professional English and pronunciation.',
+    displayOrder: 0,
+  },
+  {
+    slug: 'communication',
+    name: 'Communication',
+    description: 'Public speaking, presentations, listening and negotiation.',
+    displayOrder: 1,
+  },
+  {
+    slug: 'leadership',
+    name: 'Leadership',
+    description: 'Decisions, teamwork, conflict resolution and emotional intelligence.',
+    displayOrder: 2,
+  },
+] as const;
+
+/** Idempotent. Creates missing categories; never overwrites an admin's edits. */
+export async function seedCategories(prisma: PrismaClient): Promise<void> {
+  for (const category of CATEGORY_DEFINITIONS) {
+    await prisma.category.upsert({
+      where: { slug: category.slug },
+      update: {},
+      create: category,
+    });
+  }
+}

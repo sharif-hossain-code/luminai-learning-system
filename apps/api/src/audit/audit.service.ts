@@ -18,7 +18,16 @@ export type AuditAction =
   | 'auth.password_reset'
   | 'auth.password_changed'
   | 'admin.user_role_changed'
-  | 'admin.user_status_changed';
+  | 'admin.user_status_changed'
+  | 'category.created'
+  | 'category.updated'
+  | 'course.created'
+  | 'course.deleted'
+  | 'course.owner_changed'
+  | 'course.submitted_for_review'
+  | 'course.returned_to_draft'
+  | 'course.published'
+  | 'course.archived';
 
 export interface AuditInput {
   action: AuditAction;
