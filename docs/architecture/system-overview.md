@@ -42,3 +42,11 @@ Locally, `docker-compose.yml` provides PostgreSQL and Redis, bound to `127.0.0.1
 - App Router with Cache Components. Pages render on the server by default; Client Components are used only for the theme toggle and mobile menu.
 - Server-only settings (`API_URL`) live in `src/lib/server-env.ts`, which imports `server-only` so a client import fails the build.
 - Design tokens are CSS variables mapped to Tailwind 4 theme names (see `docs/design-system/tokens.md`).
+
+## Identity (Phase 2)
+
+- **Web app** route groups: `(marketing)` (public pages), `(auth)` (split-screen sign-up, sign-in, verification and reset pages), `onboarding`, and `(app)` (signed-in shell with sidebar: dashboard and settings).
+- **Same-origin proxy**: `apps/web/src/app/api/v1/[...path]/route.ts` forwards browser API calls to the API, so the session cookie is first-party. `apps/web/src/proxy.ts` redirects cookie-less requests for signed-in pages to `/sign-in?next=…`.
+- **API modules**: `identity` (sessions, auth guard, auth service and controller), `users` (`/users/me`), `admin` (`/admin/users`), `audit`, `rate-limit`, `email`, `jobs`, `openapi`.
+- **Worker**: `apps/api/src/worker.ts` runs BullMQ consumers (email) from the same codebase. See ADR-003.
+- **Data**: `users`, `user_profiles` (preferences JSON), `sessions`, `email_verification_tokens`, `password_reset_tokens`, `audit_events`.

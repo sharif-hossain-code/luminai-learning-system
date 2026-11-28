@@ -72,7 +72,7 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      - name: Integration tests (migrations, seed, API health)
+      - name: Integration tests (migrations, seed, API)
         run: pnpm test:integration
 
       - name: Build
@@ -81,7 +81,8 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @luminai/web exec playwright install --with-deps chromium
 
-      - name: Web smoke tests
+      # Starts the built API (against the test database), a test mail sink and the web app.
+      - name: End-to-end tests
         run: pnpm test:e2e
 
       - name: Upload Playwright report

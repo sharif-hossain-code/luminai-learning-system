@@ -1,9 +1,6 @@
-import { GeistMono } from 'geist/font/mono';
-import { GeistSans } from 'geist/font/sans';
+import '@fontsource-variable/inter';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
-import { SiteFooter } from '@/components/site-footer';
-import { SiteHeader } from '@/components/site-header';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import './globals.css';
 
@@ -23,14 +20,11 @@ export const viewport: Viewport = {
   ],
 };
 
+/** Each route group (marketing, auth, onboarding, app) provides its own <main id="main-content">. */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     // suppressHydrationWarning: the theme script may set data-theme before React hydrates.
-    <html
-      lang="en"
-      className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
-      suppressHydrationWarning
-    >
+    <html lang="en" className="antialiased" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
@@ -41,11 +35,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         >
           Skip to main content
         </a>
-        <SiteHeader />
-        <main id="main-content" className="flex-1">
-          {children}
-        </main>
-        <SiteFooter />
+        {children}
       </body>
     </html>
   );

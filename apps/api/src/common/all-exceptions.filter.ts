@@ -9,6 +9,7 @@ import {
 import { ErrorCode, type ErrorEnvelope, type FieldError } from '@luminai/contracts';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
+import { AppError } from './app-error.js';
 
 const STATUS_TO_CODE: Partial<Record<number, ErrorCode>> = {
   [HttpStatus.BAD_REQUEST]: ErrorCode.BAD_REQUEST,
@@ -22,7 +23,8 @@ const STATUS_TO_CODE: Partial<Record<number, ErrorCode>> = {
   [HttpStatus.SERVICE_UNAVAILABLE]: ErrorCode.SERVICE_UNAVAILABLE,
 };
 
-const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
+const DEFAULT_MESSAGES: Partial<Record<ErrorCode, string>> &
+  Record<'INTERNAL_ERROR' | 'BAD_REQUEST', string> = {
   BAD_REQUEST: 'The request could not be processed.',
   VALIDATION_FAILED: 'Some fields are invalid.',
   UNAUTHENTICATED: 'You need to sign in to do that.',
@@ -72,6 +74,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
       });
     }
 
+    if (exception instanceof AppError) {
+      return this.build(exception.getStatus(), exception.code, requestId, {
+        message: exception.message,
+        fieldErrors: exception.fieldErrors,
+      });
+    }
+
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const code =
@@ -114,7 +123,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       body: {
         error: {
           code,
-          message: options.message ?? DEFAULT_MESSAGES[code],
+          message: options.message ?? DEFAULT_MESSAGES[code] ?? DEFAULT_MESSAGES.BAD_REQUEST,
           requestId,
           fieldErrors: options.fieldErrors ?? [],
         },

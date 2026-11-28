@@ -7,18 +7,7 @@ import {
 } from '@luminai/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.factory.js';
-import { loadConfig } from '../src/config/env.schema.js';
-
-/** Real Postgres and Redis, using the isolated test database. */
-function testConfig(overrides: Record<string, string> = {}) {
-  return loadConfig({
-    ...process.env,
-    NODE_ENV: 'test',
-    DATABASE_URL: process.env.TEST_DATABASE_URL,
-    HEALTH_CHECK_TIMEOUT_MS: '1000',
-    ...overrides,
-  });
-}
+import { testConfig } from './helpers.js';
 
 describe('API with healthy dependencies', () => {
   let app: NestFastifyApplication;
@@ -67,6 +56,12 @@ describe('API with healthy dependencies', () => {
     const body = errorEnvelopeSchema.parse(response.json());
     expect(body.error.code).toBe('RESOURCE_NOT_FOUND');
     expect(body.error.requestId).toBe(response.headers['x-request-id']);
+  });
+
+  it('requires the CSRF header on state-changing requests', async () => {
+    const response = await app.inject({ method: 'POST', url: '/api/v1/auth/logout' });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { code: 'CSRF_CHECK_FAILED' } });
   });
 
   it('does not serve routes outside the /api/v1 prefix', async () => {

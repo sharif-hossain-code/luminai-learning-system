@@ -4,7 +4,9 @@ Last updated: 2026-11-27
 
 ## Current phase
 
-**Phase 1: development foundation. Complete, pending review of the first pull request.**
+**Phase 2: identity and profile. Complete, pending review (stacked on the Phase 1 pull request).**
+
+Phase 1 is complete and green in CI (PR #1, not yet merged).
 
 ## Phase 0: inspection (done)
 
@@ -41,14 +43,65 @@ Last updated: 2026-11-27
 | `pnpm audit --prod --audit-level high`         | No known vulnerabilities (after the `effect` override)             |
 | Deliberately failing unit test                 | `pnpm test` exits 1                                                |
 
+## Phase 2: identity and profile
+
+Designs: Figma file `IM8Asf7gw3rlQFwBxVqJRp` (sign up/in, check email, verify, forgot/reset password, onboarding steps 1–3, settings profile and security). Exports are in the project files under `design/figma-export/`.
+
+| Gate item (requirements §14)        | Status              | Where                                                                                                                                  |
+| ----------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Registration and email verification | Done                | `POST /auth/register`, `/auth/verify-email`, `/auth/resend-verification`; `/sign-up`, `/check-email`, `/verify-email`                  |
+| Login, logout, session revocation   | Done                | `/auth/login`, `/auth/logout`, `/auth/logout-all`, `/auth/sessions`, `/auth/sessions/revoke-others`; Settings → Security               |
+| Password reset                      | Done                | `/auth/forgot-password`, `/auth/reset-password`, `/auth/change-password`; `/forgot-password`, `/reset-password`                        |
+| Profile and learning preferences    | Done                | `/users/me`, `/users/me/profile`, `/users/me/preferences`; onboarding and Settings → Profile                                           |
+| RBAC guards and ownership checks    | Done                | Global `AuthGuard` with `@Roles`; `/admin/users` (list, search, role, status); every `/users/me` query is scoped to the session's user |
+| Admin MFA                           | Pre-production task | Assumption A18                                                                                                                         |
+| Authentication UI and validation    | Done                | Shared Zod schemas and password rules in `@luminai/contracts`                                                                          |
+| Email delivery                      | Done                | BullMQ worker (`apps/api/src/worker.ts`), Mailpit for local mail                                                                       |
+| OpenAPI                             | Done                | Generated from contracts at `/api/v1/openapi.json` (non-production); a test keeps it in sync with the routes                           |
+
+Security controls are described in `docs/security/web-security.md`; decisions in ADR-003.
+
+### Gate tests
+
+| Required test                         | Covered by                                                                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Correct/incorrect login               | `identity.integration.spec.ts` ("same error for a wrong password and an unknown email"), e2e "sign-in errors"                        |
+| Expired/used verification token       | "rejects an expired verification link", "registers, blocks sign-in until verified, then verifies once", "invalidates the old link"   |
+| Password reset single use             | "resets the password with a single-use link and signs out every session", "rejects an expired reset link"                            |
+| Session revoked after logout          | "logout revokes the session", "logout-all", "revoke-others", e2e settings test                                                       |
+| User A cannot access User B's profile | "only ever returns the caller's own account", "lets me revoke one, but not someone else's", "keeps each user's preferences separate" |
+| Learner cannot call admin route       | "stops learners and anonymous callers", "stops content editors"                                                                      |
+| Rate limiting works                   | `rate-limit.integration.spec.ts` (4 tests)                                                                                           |
+
+### Test results (local run, 2026-11-27)
+
+| Suite                                              | Result                                                                                                                                                                                          |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm format:check`, `pnpm lint`, `pnpm typecheck` | Pass (6/6 tasks)                                                                                                                                                                                |
+| `pnpm test` (unit)                                 | 30 pass (API 23, contracts 7)                                                                                                                                                                   |
+| `pnpm test:integration`                            | 60 pass (database 6, API 54)                                                                                                                                                                    |
+| `pnpm build`                                       | Web, API, contracts, database build                                                                                                                                                             |
+| `pnpm test:e2e` (desktop + mobile)                 | 28 pass, 2 skipped by design. Covers sign-up → verify → onboarding → dashboard, sign-in errors, protected-page redirect, password reset, invalid links, profile and sessions settings, sign-out |
+| `pnpm audit --prod --audit-level high`             | No known vulnerabilities                                                                                                                                                                        |
+
+Verified against local Postgres 16 and Redis 7 (no Docker in the build environment), using installed Chrome for Playwright.
+
+### Differences from the design
+
+- No "Continue with Google" (A13), no session location (A16), no avatar upload or delete-account section yet (A17).
+- Reset password always signs out other devices, so the design's "Sign me out on other devices" checkbox is not shown.
+- Two colour tokens adjusted for contrast (A11). Input border contrast is raised with design (A15).
+- The sidebar shows only Dashboard and Profile & settings; the other items arrive with their phases.
+
 ## Known issues and debt
 
 - Docker Compose not yet run (see above).
-- OpenAPI/Swagger is not set up yet; the only endpoints are health checks. Add it with the first identity endpoints.
 - No Content Security Policy on the web app yet (see assumption A10).
+- Docker Compose now includes Mailpit; like Postgres and Redis it was written but not run here.
+- The dashboard is a placeholder until the course catalogue exists.
+- Breached-password check and admin MFA are pre-production tasks (A18, A19).
 - No Dockerfiles yet: they depend on the hosting choice (assumption A5).
-- No BullMQ worker yet: it is added with the first background job (verification emails in Phase 2).
 
 ## Next task
 
-**Phase 2, task 1:** add email verification and password reset token tables, and the `POST /auth/register` endpoint with Argon2id hashing, email normalisation, rate limiting and negative tests. Set up OpenAPI documentation alongside it.
+**Phase 3, task 1:** course catalogue data model (categories, courses, modules, lessons, resources, versions) with the draft/published workflow, and the public catalogue API with search, filters and pagination. Design the catalogue and course detail screens in Figma first.

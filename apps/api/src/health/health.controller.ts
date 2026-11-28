@@ -1,8 +1,10 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import type { LivenessResponse, ReadinessResponse } from '@luminai/contracts';
 import type { FastifyReply } from 'fastify';
+import { Public } from '../identity/auth-context.js';
 import { HealthService } from './health.service.js';
 
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly health: HealthService) {}
