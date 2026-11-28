@@ -67,6 +67,9 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
   auditEventsAsActor      AuditEvent[]
+  coursesOwned            Course[]                 @relation("CourseOwner")
+  coursesUpdated          Course[]                 @relation("CourseUpdatedBy")
+  courseVersionsPublished CourseVersion[]
 
   @@index([roleId])
   @@map("users")
@@ -161,4 +164,225 @@ model AuditEvent {
   @@index([actorUserId, createdAt])
   @@index([resourceType, resourceId])
   @@map("audit_events")
+}
+
+// ---------------------------------------------------------------------------
+// Course catalogue and content (Phase 3). See docs/architecture/course-content.md.
+//
+// `courses`, `modules`, `lessons` and `lesson_resources` hold the editable
+// working copy. Publishing freezes it into an immutable `course_versions` row,
+// and learners only ever read published versions, so edits to a live course
+// stay invisible until the next publish.
+// ---------------------------------------------------------------------------
+
+enum CourseStatus {
+  /// Never published, or returned for more work.
+  DRAFT
+  /// Submitted by an editor; waiting for someone with publishing permission.
+  REVIEW
+  /// A version is live in the catalogue (the working copy may have newer edits).
+  PUBLISHED
+  /// Withdrawn from the catalogue. Versions are kept.
+  ARCHIVED
+
+  @@map("course_status")
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+
+  @@map("course_level")
+}
+
+enum LessonType {
+  TEXT
+  VIDEO
+  AUDIO
+  INTERACTIVE
+  EXTERNAL_LINK
+
+  @@map("lesson_type")
+}
+
+enum LessonCompletionRule {
+  /// The learner marks the lesson complete.
+  MARK_COMPLETE
+  /// Opening the lesson completes it.
+  VIEW
+  /// Finishing the video or audio completes it.
+  MEDIA_FINISHED
+
+  @@map("lesson_completion_rule")
+}
+
+enum LessonResourceType {
+  VIDEO
+  AUDIO
+  CAPTIONS
+  TRANSCRIPT
+  DOCUMENT
+  LINK
+
+  @@map("lesson_resource_type")
+}
+
+model Category {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug         String   @unique
+  name         String
+  description  String?
+  isActive     Boolean  @default(true) @map("is_active")
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  courses        Course[]
+  courseVersions CourseVersion[]
+
+  @@index([isActive, displayOrder])
+  @@map("categories")
+}
+
+model Course {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  categoryId         String       @map("category_id") @db.Uuid
+  /// Unique, lower-case, URL-safe. Locked once the course has been published.
+  slug               String       @unique
+  title              String
+  summary            String       @default("")
+  description        String       @default("")
+  level              CourseLevel  @default(BEGINNER)
+  estimatedMinutes   Int          @default(0) @map("estimated_minutes")
+  outcomes           String[]     @default([])
+  prerequisites      String[]     @default([])
+  /// Extra search terms that don't appear in the title or summary.
+  keywords           String[]     @default([])
+  coverObjectKey     String?      @map("cover_object_key")
+  status             CourseStatus @default(DRAFT)
+  /// Curated catalogue order: lower comes first; null means not featured.
+  featuredRank       Int?         @map("featured_rank")
+  /// Incremented on every edit of the working copy (course, modules, lessons, resources).
+  draftRevision      Int          @default(1) @map("draft_revision")
+  /// The draft revision that the live version was published from.
+  publishedRevision  Int?         @map("published_revision")
+  publishedVersionId String?      @unique @map("published_version_id") @db.Uuid
+  /// The editor responsible for this course. Content editors can only edit their own courses.
+  ownerId            String       @map("owner_id") @db.Uuid
+  updatedById        String?      @map("updated_by_id") @db.Uuid
+  reviewRequestedAt  DateTime?    @map("review_requested_at") @db.Timestamptz(3)
+  firstPublishedAt   DateTime?    @map("first_published_at") @db.Timestamptz(3)
+  publishedAt        DateTime?    @map("published_at") @db.Timestamptz(3)
+  archivedAt         DateTime?    @map("archived_at") @db.Timestamptz(3)
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  category         Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  owner            User            @relation("CourseOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  updatedBy        User?           @relation("CourseUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  publishedVersion CourseVersion?  @relation("PublishedVersion", fields: [publishedVersionId], references: [id], onDelete: Restrict)
+  versions         CourseVersion[] @relation("CourseVersions")
+  modules          Module[]
+
+  @@index([status])
+  @@index([ownerId, updatedAt])
+  @@index([categoryId])
+  @@map("courses")
+}
+
+/// An immutable published snapshot of a course. Catalogue queries read these
+/// columns; `snapshot` holds the full module and lesson tree as published.
+model CourseVersion {
+  id               String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId         String                   @map("course_id") @db.Uuid
+  version          Int
+  categoryId       String                   @map("category_id") @db.Uuid
+  title            String
+  summary          String
+  level            CourseLevel
+  estimatedMinutes Int                      @map("estimated_minutes")
+  moduleCount      Int                      @map("module_count")
+  lessonCount      Int                      @map("lesson_count")
+  /// Title, summary and keywords joined, for full-text search (see migration).
+  searchText       String                   @map("search_text")
+  /// Generated column (weighted title + search_text). Written by Postgres, never by the app.
+  searchVector     Unsupported("tsvector")? @map("search_vector")
+  /// Versioned JSON snapshot (snapshotSchemaVersion inside). Never updated.
+  snapshot         Json
+  /// The working-copy revision this version was published from.
+  draftRevision    Int                      @map("draft_revision")
+  publishedById    String?                  @map("published_by_id") @db.Uuid
+  publishedAt      DateTime                 @default(now()) @map("published_at") @db.Timestamptz(3)
+
+  course      Course   @relation("CourseVersions", fields: [courseId], references: [id], onDelete: Cascade)
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  publishedBy User?    @relation(fields: [publishedById], references: [id], onDelete: SetNull)
+  liveFor     Course?  @relation("PublishedVersion")
+
+  @@unique([courseId, version])
+  @@index([categoryId, level])
+  @@index([searchVector], map: "course_versions_search_vector_idx", type: Gin)
+  @@map("course_versions")
+}
+
+model Module {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId    String   @map("course_id") @db.Uuid
+  title       String
+  description String   @default("")
+  /// 0-based display order. Ties are broken by id so the order is always deterministic.
+  position    Int
+  isRequired  Boolean  @default(true) @map("is_required")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@index([courseId, position])
+  @@map("modules")
+}
+
+model Lesson {
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  moduleId         String               @map("module_id") @db.Uuid
+  title            String
+  type             LessonType           @default(TEXT)
+  objectives       String[]             @default([])
+  /// Structured content blocks (LessonContent schema in @luminai/contracts). Never raw HTML.
+  content          Json                 @default("{\"schemaVersion\":1,\"blocks\":[]}")
+  estimatedMinutes Int                  @default(0) @map("estimated_minutes")
+  position         Int
+  completionRule   LessonCompletionRule @default(MARK_COMPLETE) @map("completion_rule")
+  isRequired       Boolean              @default(true) @map("is_required")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  module    Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  resources LessonResource[]
+
+  @@index([moduleId, position])
+  @@map("lessons")
+}
+
+model LessonResource {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lessonId    String             @map("lesson_id") @db.Uuid
+  type        LessonResourceType
+  title       String
+  /// Private object storage key (uploads arrive with the media storage work).
+  storageKey  String?            @map("storage_key")
+  /// An https URL that passed the safe URL policy.
+  externalUrl String?            @map("external_url")
+  mimeType    String?            @map("mime_type")
+  sizeBytes   Int?               @map("size_bytes")
+  position    Int
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, position])
+  @@map("lesson_resources")
 }

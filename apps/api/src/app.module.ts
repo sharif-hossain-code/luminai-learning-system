@@ -2,6 +2,7 @@ import { Module, type DynamicModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { AdminModule } from './admin/admin.module.js';
 import { AuditModule } from './audit/audit.module.js';
+import { CoursesModule } from './courses/courses.module.js';
 import { CsrfGuard } from './common/csrf.guard.js';
 import { ConfigModule } from './config/config.module.js';
 import type { AppConfig } from './config/env.schema.js';
@@ -34,6 +35,7 @@ export class AppModule {
         IdentityModule,
         UsersModule,
         AdminModule,
+        CoursesModule,
       ],
       controllers: config.NODE_ENV === 'production' ? [] : [OpenApiController],
       // Guards run in this order: CSRF, then authentication/roles, then rate limits
