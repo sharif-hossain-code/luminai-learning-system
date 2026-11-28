@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { adminAssessmentSchema, snapshotAssessmentSchema } from './assessment.js';
 import { lessonContentSchema, multilineText, plainText, safeUrlSchema } from './content.js';
 
 // ---------- Enumerations (values match the database enums) ----------
@@ -127,7 +128,11 @@ export type CatalogCourseDetail = z.infer<typeof catalogCourseDetailSchema>;
 
 // ---------- Published snapshot (stored in course_versions.snapshot) ----------
 
-export const COURSE_SNAPSHOT_SCHEMA_VERSION = 1;
+/**
+ * Version 2 added `assessments`. Version 1 snapshots (published before Phase 5)
+ * are still read: they simply have no assessments.
+ */
+export const COURSE_SNAPSHOT_SCHEMA_VERSION = 2;
 
 export const snapshotResourceSchema = z.object({
   id: z.uuid(),
@@ -160,7 +165,7 @@ export const snapshotModuleSchema = z.object({
 });
 
 export const courseSnapshotSchema = z.object({
-  snapshotSchemaVersion: z.literal(COURSE_SNAPSHOT_SCHEMA_VERSION),
+  snapshotSchemaVersion: z.union([z.literal(1), z.literal(COURSE_SNAPSHOT_SCHEMA_VERSION)]),
   course: z.object({
     id: z.uuid(),
     slug: z.string(),
@@ -176,6 +181,11 @@ export const courseSnapshotSchema = z.object({
     coverObjectKey: z.string().nullable(),
   }),
   modules: z.array(snapshotModuleSchema),
+  /**
+   * Module quizzes (in module order, then position) and course-level assessments
+   * (moduleId null). Includes the answer keys: never send a snapshot to learners.
+   */
+  assessments: z.array(snapshotAssessmentSchema).default([]),
 });
 export type CourseSnapshot = z.infer<typeof courseSnapshotSchema>;
 
@@ -362,6 +372,8 @@ export const adminCourseSchema = adminCourseSummarySchema.extend({
   reviewRequestedAt: z.iso.datetime().nullable(),
   publishedAt: z.iso.datetime().nullable(),
   modules: z.array(adminModuleSchema),
+  /** Module quizzes and course-level assessments, with their questions and answer keys. */
+  assessments: z.array(adminAssessmentSchema),
   /** What blocks publishing right now (empty when the course can be published). */
   publishIssues: z.array(publishIssueSchema),
   permissions: z.object({ canPublish: z.boolean(), canArchive: z.boolean() }),

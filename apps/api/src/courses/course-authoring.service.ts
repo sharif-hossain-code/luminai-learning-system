@@ -139,8 +139,11 @@ export class CourseAuthoringService {
     return toAdminCourse(await this.loadTree(this.db, courseId), this.permissions(actor));
   }
 
-  /** Runs an edit of one course's working copy in a transaction, then returns the new tree. */
-  private async edit(
+  /**
+   * Runs an edit of one course's working copy in a transaction (ownership checked,
+   * draft revision bumped), then returns the new tree. Also used by assessment authoring.
+   */
+  async edit(
     actor: Actor,
     resolveCourseId: (tx: Tx) => Promise<string>,
     work: (tx: Tx, courseId: string) => Promise<void>,
@@ -546,6 +549,7 @@ export class CourseAuthoringService {
       actor,
       (tx) => this.courseIdForModule(tx, moduleId),
       async (tx, courseId) => {
+        // The module's quizzes go with it (foreign key cascade).
         await tx.module.delete({ where: { id: moduleId } });
         const rest = await tx.module.findMany({
           where: { courseId },

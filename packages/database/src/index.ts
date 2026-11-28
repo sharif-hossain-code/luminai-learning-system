@@ -1,6 +1,8 @@
 export { createPrismaClient, type CreatePrismaClientOptions } from './client.js';
 export { PrismaClient, Prisma } from './generated/prisma/client.js';
 export {
+  AssessmentFeedbackMode,
+  AttemptStatus,
   CourseLevel,
   CourseStatus,
   EnrollmentStatus,
@@ -8,10 +10,14 @@ export {
   LessonProgressStatus,
   LessonResourceType,
   LessonType,
+  QuestionType,
   RoleCode,
   UserStatus,
 } from './generated/prisma/enums.js';
 export type {
+  Assessment,
+  AssessmentAttempt,
+  AttemptAnswer,
   AuditEvent,
   Category,
   Course,
@@ -23,6 +29,7 @@ export type {
   Module,
   EmailVerificationToken,
   PasswordResetToken,
+  Question,
   Role,
   Session,
   User,

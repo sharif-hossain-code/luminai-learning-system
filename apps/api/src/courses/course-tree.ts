@@ -1,16 +1,24 @@
 import {
   COURSE_SNAPSHOT_SCHEMA_VERSION,
+  isChoiceType,
+  isScoredType,
+  type AdminAssessment,
   type AdminCourse,
   type AdminCourseSummary,
   type CourseSnapshot,
   type LessonContent,
   type PublishIssue,
+  type SnapshotAssessment,
+  type SnapshotQuestion,
 } from '@luminai/contracts';
 import { Prisma } from '@luminai/database';
 
 /** Deterministic order: position first, then id to break any tie. */
 export const BY_POSITION = [{ position: 'asc' }, { id: 'asc' }] as const satisfies (
-  Prisma.ModuleOrderByWithRelationInput | Prisma.LessonOrderByWithRelationInput
+  | Prisma.ModuleOrderByWithRelationInput
+  | Prisma.LessonOrderByWithRelationInput
+  | Prisma.AssessmentOrderByWithRelationInput
+  | Prisma.QuestionOrderByWithRelationInput
 )[];
 
 const personSelect = {
@@ -32,6 +40,10 @@ export const courseTreeInclude = {
         include: { resources: { orderBy: [...BY_POSITION] } },
       },
     },
+  },
+  assessments: {
+    orderBy: [...BY_POSITION],
+    include: { questions: { orderBy: [...BY_POSITION] } },
   },
 } satisfies Prisma.CourseInclude;
 
@@ -80,6 +92,80 @@ export function toAdminCourseSummary(row: CourseSummaryRow): AdminCourseSummary 
 /** Stored content was validated on write; this narrows the JSON column's type. */
 function lessonContent(value: Prisma.JsonValue): LessonContent {
   return value as unknown as LessonContent;
+}
+
+type AssessmentRow = CourseTree['assessments'][number];
+type QuestionRow = AssessmentRow['questions'][number];
+
+const asObject = (value: Prisma.JsonValue) =>
+  (value && typeof value === 'object' && !Array.isArray(value) ? value : {}) as Record<
+    string,
+    unknown
+  >;
+
+/** Question JSON columns were validated on write; this narrows them, filling defaults. */
+export function toSnapshotQuestion(row: QuestionRow): SnapshotQuestion {
+  const key = asObject(row.answerKey);
+  const rubric = asObject(row.rubric);
+  return {
+    id: row.id,
+    type: row.type,
+    prompt: row.prompt,
+    options: Array.isArray(row.options) ? (row.options as SnapshotQuestion['options']) : [],
+    answerKey: {
+      ...(Array.isArray(key.correctOptionIds)
+        ? { correctOptionIds: key.correctOptionIds as string[] }
+        : {}),
+      ...(Array.isArray(key.acceptedAnswers)
+        ? { acceptedAnswers: key.acceptedAnswers as string[] }
+        : {}),
+    },
+    explanation: row.explanation,
+    rubric: {
+      criteria: Array.isArray(rubric.criteria)
+        ? (rubric.criteria as SnapshotQuestion['rubric']['criteria'])
+        : [],
+      minWords: typeof rubric.minWords === 'number' ? rubric.minWords : null,
+      maxWords: typeof rubric.maxWords === 'number' ? rubric.maxWords : null,
+    },
+    points: row.points,
+  };
+}
+
+/** Module quizzes in module order, then course-level assessments; each in position order. */
+export function orderedAssessments(tree: Pick<CourseTree, 'modules' | 'assessments'>) {
+  const moduleIndex = new Map(tree.modules.map((module, index) => [module.id, index]));
+  const rank = (row: AssessmentRow) =>
+    row.moduleId === null ? tree.modules.length : (moduleIndex.get(row.moduleId) ?? 0);
+  return [...tree.assessments].sort(
+    (a, b) => rank(a) - rank(b) || a.position - b.position || a.id.localeCompare(b.id),
+  );
+}
+
+export function toSnapshotAssessment(row: AssessmentRow): SnapshotAssessment {
+  return {
+    id: row.id,
+    moduleId: row.moduleId,
+    title: row.title,
+    instructions: row.instructions,
+    isRequired: row.isRequired,
+    passPercent: row.passPercent,
+    maxAttempts: row.maxAttempts,
+    feedbackMode: row.feedbackMode,
+    estimatedMinutes: row.estimatedMinutes,
+    questions: row.questions.map(toSnapshotQuestion),
+  };
+}
+
+function toAdminAssessment(row: AssessmentRow): AdminAssessment {
+  return {
+    ...toSnapshotAssessment(row),
+    position: row.position,
+    questions: row.questions.map((question) => ({
+      ...toSnapshotQuestion(question),
+      position: question.position,
+    })),
+  };
 }
 
 export function toAdminCourse(
@@ -140,6 +226,7 @@ export function toAdminCourse(
     reviewRequestedAt: tree.reviewRequestedAt?.toISOString() ?? null,
     publishedAt: tree.publishedAt?.toISOString() ?? null,
     modules,
+    assessments: orderedAssessments(tree).map(toAdminAssessment),
     publishIssues: findPublishIssues(tree),
     permissions,
   };
@@ -188,6 +275,7 @@ export function buildSnapshot(tree: CourseTree): CourseSnapshot {
         })),
       })),
     })),
+    assessments: orderedAssessments(tree).map(toSnapshotAssessment),
   };
 }
 
@@ -206,6 +294,46 @@ export interface ValidatableCourse {
   outcomes: string[];
   category: { isActive: boolean };
   modules: { id: string; title: string; lessons: ValidatableLesson[] }[];
+  assessments?: AssessmentRow[];
+}
+
+/** What stops one question from being published. */
+export function questionIssues(question: SnapshotQuestion): string[] {
+  const issues: string[] = [];
+  if (!question.prompt.trim()) issues.push('write the question');
+  if (isChoiceType(question.type)) {
+    const ids = new Set(question.options.map((option) => option.id));
+    const correct = (question.answerKey.correctOptionIds ?? []).filter((id) => ids.has(id));
+    if (question.options.length < 2) issues.push('add at least two options');
+    if (question.options.some((option) => !option.text.trim())) issues.push('fill in every option');
+    if (correct.length === 0) issues.push('mark the correct answer');
+    else if (question.type !== 'MULTIPLE_CHOICE' && correct.length > 1) {
+      issues.push('mark only one correct answer');
+    }
+  }
+  if (question.type === 'SHORT_TEXT' && !(question.answerKey.acceptedAnswers ?? []).length) {
+    issues.push('add at least one accepted answer');
+  }
+  if (question.type === 'WRITING') {
+    if (question.rubric.criteria.length === 0) issues.push('add at least one rubric criterion');
+    const { minWords, maxWords } = question.rubric;
+    if (minWords !== null && maxWords !== null && minWords > maxWords) {
+      issues.push('make the minimum word count lower than the maximum');
+    }
+  }
+  if (isScoredType(question.type) && question.points < 1) issues.push('give it at least 1 point');
+  return issues;
+}
+
+function assessmentIssues(row: AssessmentRow): string[] {
+  const issues: string[] = [];
+  if (row.questions.length === 0) issues.push('Add at least one question.');
+  if (row.estimatedMinutes <= 0) issues.push('Set how many minutes the quiz takes.');
+  row.questions.forEach((question, index) => {
+    const problems = questionIssues(toSnapshotQuestion(question));
+    if (problems.length) issues.push(`Question ${index + 1}: ${problems.join(', ')}.`);
+  });
+  return issues;
 }
 
 const MEDIA_TYPES = new Set(['VIDEO', 'AUDIO']);
@@ -266,6 +394,11 @@ export function findPublishIssues(course: ValidatableCourse): PublishIssue[] {
       for (const message of lessonIssues(lesson)) {
         add(`lesson:${lesson.id}`, `${lesson.title}: ${message}`);
       }
+    }
+  }
+  for (const assessment of course.assessments ?? []) {
+    for (const message of assessmentIssues(assessment)) {
+      add(`assessment:${assessment.id}`, `${assessment.title}: ${message}`);
     }
   }
   return issues;
