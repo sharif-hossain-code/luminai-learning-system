@@ -34,7 +34,7 @@ const NETWORK_MESSAGE = "We couldn't reach Luminai. Check your connection and tr
 export async function apiFetch<T = unknown>(
   path: string,
   options: {
-    method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
     body?: unknown;
     signal?: AbortSignal;
   } = {},

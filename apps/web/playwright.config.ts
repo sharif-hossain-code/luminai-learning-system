@@ -49,6 +49,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
     // Optional: use an installed browser instead of Playwright's (e.g. PLAYWRIGHT_CHANNEL=chrome).
     ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}),
+    // Or point at a browser binary directly (e.g. a preinstalled Chromium).
+    ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH
+      ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } }
+      : {}),
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
@@ -62,9 +66,9 @@ export default defineConfig({
       timeout: 15_000,
     },
     {
-      // Migrate and seed the test database, then start the built API.
+      // Migrate and seed the test database, load the demo catalogue, then start the built API.
       command:
-        'pnpm --dir ../../packages/database exec prisma migrate deploy && pnpm --dir ../../packages/database exec prisma db seed && node ../api/dist/main.js',
+        'pnpm --dir ../../packages/database exec prisma migrate deploy && pnpm --dir ../../packages/database exec prisma db seed && node ../api/dist/scripts/seed-demo-courses.js && node ../api/dist/main.js',
       url: `http://localhost:${API_PORT}/api/v1/health/live`,
       env: apiEnv,
       reuseExistingServer: !process.env.CI,

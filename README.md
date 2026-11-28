@@ -37,7 +37,8 @@ docker compose up -d          # start PostgreSQL, Redis and Mailpit (local email
 docker compose ps             # all three should show "healthy"
 
 pnpm db:migrate               # apply migrations to the development database
-pnpm db:seed                  # create the LEARNER, CONTENT_EDITOR and ADMIN roles (safe to re-run)
+pnpm db:seed                  # create the roles and course categories (safe to re-run)
+pnpm --filter @luminai/api build && pnpm --filter @luminai/api seed:demo   # optional: six sample courses
 ```
 
 Generate a session secret with:
@@ -65,21 +66,22 @@ To make yourself an admin locally, sign up, then run `pnpm --filter @luminai/dat
 
 ## Everyday commands
 
-| Command                             | What it does                                                                        |
-| ----------------------------------- | ----------------------------------------------------------------------------------- |
-| `pnpm dev`                          | Run web and API in watch mode                                                       |
-| `pnpm build`                        | Build every package and app                                                         |
-| `pnpm lint`                         | ESLint everywhere                                                                   |
-| `pnpm typecheck`                    | TypeScript in strict mode everywhere                                                |
-| `pnpm test`                         | Unit tests                                                                          |
-| `pnpm test:integration`             | Integration tests against the test database (`TEST_DATABASE_URL`) and Redis         |
-| `pnpm test:e2e`                     | Playwright end-to-end tests on desktop and mobile (run `pnpm build` first)          |
-| `pnpm format` / `pnpm format:check` | Prettier                                                                            |
-| `pnpm db:migrate`                   | Create and apply a migration after editing `packages/database/prisma/schema.prisma` |
-| `pnpm db:migrate:deploy`            | Apply committed migrations without creating new ones (CI and deployments)           |
-| `pnpm db:seed`                      | Seed reference data                                                                 |
+| Command                                | What it does                                                                        |
+| -------------------------------------- | ----------------------------------------------------------------------------------- |
+| `pnpm dev`                             | Run web and API in watch mode                                                       |
+| `pnpm build`                           | Build every package and app                                                         |
+| `pnpm lint`                            | ESLint everywhere                                                                   |
+| `pnpm typecheck`                       | TypeScript in strict mode everywhere                                                |
+| `pnpm test`                            | Unit tests                                                                          |
+| `pnpm test:integration`                | Integration tests against the test database (`TEST_DATABASE_URL`) and Redis         |
+| `pnpm test:e2e`                        | Playwright end-to-end tests on desktop and mobile (run `pnpm build` first)          |
+| `pnpm format` / `pnpm format:check`    | Prettier                                                                            |
+| `pnpm db:migrate`                      | Create and apply a migration after editing `packages/database/prisma/schema.prisma` |
+| `pnpm db:migrate:deploy`               | Apply committed migrations without creating new ones (CI and deployments)           |
+| `pnpm db:seed`                         | Seed reference data (roles, course categories)                                      |
+| `pnpm --filter @luminai/api seed:demo` | Publish the sample course catalogue (development only; skips courses that exist)    |
 
-Before the first `pnpm test:e2e`, install the browser once: `pnpm --filter @luminai/web exec playwright install chromium`. The suite starts its own API (port 4100, against `TEST_DATABASE_URL`), a test mail sink and the web app (port 3100), so don't run it at the same time as `pnpm test:integration`.
+Before the first `pnpm test:e2e`, install the browser once: `pnpm --filter @luminai/web exec playwright install chromium`. The suite starts its own API (port 4100, against `TEST_DATABASE_URL`), a test mail sink and the web app (port 3100), so don't run it at the same time as `pnpm test:integration`. It also loads the sample catalogue into the test database. To use a browser that is already installed, set `PLAYWRIGHT_CHANNEL=chrome` or `PLAYWRIGHT_EXECUTABLE_PATH=/path/to/chromium`.
 
 ## Troubleshooting
 

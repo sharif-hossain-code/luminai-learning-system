@@ -1,12 +1,12 @@
 # Implementation status
 
-Last updated: 2026-11-27
+Last updated: 2026-11-28
 
 ## Current phase
 
-**Phase 2: identity and profile. Complete, pending review (stacked on the Phase 1 pull request).**
+**Phase 3: course catalogue and content. Complete, pending review (stacked on the Phase 2 pull request).**
 
-Phase 1 is complete and green in CI (PR #1, not yet merged).
+Phases 1 and 2 are complete; their pull requests are not merged yet.
 
 ## Phase 0: inspection (done)
 
@@ -93,15 +93,60 @@ Verified against local Postgres 16 and Redis 7 (no Docker in the build environme
 - Two colour tokens adjusted for contrast (A11). Input border contrast is raised with design (A15).
 - The sidebar shows only Dashboard and Profile & settings; the other items arrive with their phases.
 
+## Phase 3: course catalogue and content
+
+Designs: the catalogue follows `designs/luminai-canvas/project/Catalog.dc.html`. Course detail and the course studio had no design, so they use the existing visual language (assumption A29). Decisions are in ADR-004; the model and workflow are described in `docs/architecture/course-content.md`.
+
+| Gate item (requirements §14)                | Status | Where                                                                                                                     |
+| ------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Categories and course catalogue             | Done   | `GET /catalog/categories`, `GET /catalog/courses` (search, category, level, length, sort, pagination); `/courses`         |
+| Course detail                               | Done   | `GET /catalog/courses/{idOrSlug}` (outline only, never lesson content); `/courses/[slug]`                                 |
+| Admin course draft creation and editing     | Done   | `/admin/courses` CRUD; Course studio `/studio`, `/studio/courses/[id]`                                                    |
+| Module, lesson and resource authoring       | Done   | `/admin/modules`, `/admin/lessons`, `/admin/resources`, reorder endpoints; lesson editor with blocks, live preview, links |
+| Content validation and publication workflow | Done   | Draft → review → published → archived; `findPublishIssues` shown live in the editor; 422 `PUBLISH_VALIDATION_FAILED`      |
+| Course version tracking                     | Done   | Immutable `course_versions` snapshots, `/admin/courses/{id}/versions`, version history in the studio                      |
+| Categories management                       | Done   | `/admin/categories` (admins); `/studio/categories`                                                                        |
+| Sample catalogue                            | Done   | `pnpm --filter @luminai/api seed:demo` publishes six courses through the authoring service                                |
+
+### Gate tests
+
+| Required test                                 | Covered by (`apps/api/test/courses.integration.spec.ts` unless noted)                                                                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Draft courses hidden from learners            | "hides drafts and courses in review from learners and anonymous visitors", "shows a published course, and keeps later edits hidden until the next publish", "hides archived courses and lists every published version"   |
+| Unauthorized editor/admin operations rejected | "rejects learners and anonymous callers on every authoring route", "stops an editor from touching another editor's course", "lets editors submit for review but not publish, archive, feature or reassign"               |
+| Module and lesson order is deterministic      | "keeps module and lesson order deterministic and reorders exactly", "publishes modules and lessons in the authored order"                                                                                                |
+| Publish validation blocks incomplete content  | "blocks publishing an empty course and lists what is missing", "blocks modules without lessons and lessons without content", "requires the media plus captions or a transcript for video lessons", `course-tree.spec.ts` |
+| Rich text safely sanitized and rendered       | "stores typed HTML as literal text and never as markup"; `packages/contracts/src/content.spec.ts` (control characters, bidi overrides, unsafe URLs); the renderer builds React elements only                             |
+| End to end                                    | `apps/web/e2e/catalog.spec.ts`, `apps/web/e2e/studio.spec.ts` (create → fix issues → publish → find in the catalogue)                                                                                                    |
+
+### Test results (local run, 2026-11-28)
+
+| Suite                                              | Result                                                                                              |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `pnpm format:check`, `pnpm lint`, `pnpm typecheck` | Pass                                                                                                |
+| `pnpm test` (unit)                                 | 60 pass (API 27, contracts 33)                                                                      |
+| `pnpm test:integration`                            | 95 pass (database 10, API 85)                                                                       |
+| `pnpm build`                                       | Web, API, contracts, database build                                                                 |
+| `pnpm test:e2e` (desktop + mobile)                 | 36 pass, 2 skipped by design. The mobile password-reset test failed once and passed on the next run |
+
+Verified against local Postgres 16 and Redis 7, using the preinstalled Chromium (`PLAYWRIGHT_EXECUTABLE_PATH`).
+
+### Differences from the design
+
+- Enrolment is not built yet (Phase 4): the course page shows "Sign up to start" to visitors and "Enrolment opens soon" to signed-in learners.
+- Resources are https links only until object storage exists (A25). Cover images use the domain illustration.
+
 ## Known issues and debt
 
 - Docker Compose not yet run (see above).
 - No Content Security Policy on the web app yet (see assumption A10).
 - Docker Compose now includes Mailpit; like Postgres and Redis it was written but not run here.
-- The dashboard is a placeholder until the course catalogue exists.
+- The dashboard suggests three published courses from the learner's first goal; progress arrives in Phase 4.
+- A course page for an unknown slug shows the not-found page with status 200 (the page streams); it is marked `noindex`.
+- The mobile password-reset e2e test failed once locally and passed on re-run; watch it in CI.
 - Breached-password check and admin MFA are pre-production tasks (A18, A19).
 - No Dockerfiles yet: they depend on the hosting choice (assumption A5).
 
 ## Next task
 
-**Phase 3, task 1:** course catalogue data model (categories, courses, modules, lessons, resources, versions) with the draft/published workflow, and the public catalogue API with search, filters and pagination. Design the catalogue and course detail screens in Figma first.
+**Phase 4, task 1:** enrolment and the lesson player. Learners enrol in the published version, open lessons in order, and progress is recorded against that version, with completion rules per lesson type.
