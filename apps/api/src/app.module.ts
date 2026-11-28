@@ -12,6 +12,7 @@ import { HealthModule } from './health/health.module.js';
 import { AuthGuard } from './identity/auth.guard.js';
 import { IdentityModule } from './identity/identity.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
+import { LearningModule } from './learning/learning.module.js';
 import { OpenApiController } from './openapi/openapi.controller.js';
 import { RateLimitGuard } from './rate-limit/rate-limit.guard.js';
 import { RateLimitModule } from './rate-limit/rate-limit.module.js';
@@ -36,6 +37,7 @@ export class AppModule {
         UsersModule,
         AdminModule,
         CoursesModule,
+        LearningModule,
       ],
       controllers: config.NODE_ENV === 'production' ? [] : [OpenApiController],
       // Guards run in this order: CSRF, then authentication/roles, then rate limits
