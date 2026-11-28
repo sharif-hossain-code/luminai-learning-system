@@ -90,7 +90,7 @@ Verified against local Postgres 16 and Redis 7 (no Docker in the build environme
 
 - No "Continue with Google" (A13), no session location (A16), no avatar upload or delete-account section yet (A17).
 - Reset password always signs out other devices, so the design's "Sign me out on other devices" checkbox is not shown.
-- Two colour tokens adjusted for contrast (A11). Input border contrast is raised with design (A15).
+- Two colour tokens adjusted for contrast (A11). Input borders now use the `border-input` token from design (A15, applied in Phase 4).
 - The sidebar shows only Dashboard and Profile & settings; the other items arrive with their phases.
 
 ## Phase 3: course catalogue and content

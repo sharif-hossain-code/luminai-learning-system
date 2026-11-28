@@ -27,7 +27,8 @@ Source of truth: the Figma file (variables and text styles), exported to `/desig
 | (auth panel)                          | `on-inverse-accent` / `-link`   | `#60A5FA` / `#93C5FD`                                 | same                              | Ticks and links on `inverse`     |
 | `text-placeholder`                    | `placeholder`                   | **`#64748B`** (Figma #94A3B8)                         | `#8391A7`                         | Placeholders                     |
 | `border-subtle`                       | `subtle`                        | `#E2E8F0`                                             | `#24324A`                         | Dividers, card borders           |
-| `border-default`                      | `default`                       | `#CBD5E1`                                             | `#334155`                         | Inputs, secondary buttons        |
+| `border-default`                      | `default`                       | `#CBD5E1`                                             | `#334155`                         | Cards, secondary buttons         |
+| `border-input`                        | `input` (in `.field-control`)   | `#8492A6`                                             | `#64748B`                         | Inputs, selects, text areas      |
 | `focus-ring` / `focus-halo`           | (in `.field-control`)           | `#2563EB` / `#C7D7FA`                                 | `#60A5FA`                         | Focus border + 3px halo          |
 | `state-success` / `-text` / `-subtle` | `success` / `-text` / `-subtle` | `#16A34A` / `#15803D` / **`#EDF8F1`** (Figma #E6F6EC) | `#22C55E` / `#4ADE80` / `#0F2A1C` | Success                          |
 | `state-warning` / `-text` / `-subtle` | `warning` / `-text` / `-subtle` | `#D97706` / `#B45309` / `#FEF3E2`                     | `#F59E0B` / `#FBBF24` / `#2E2010` | Warnings                         |
@@ -51,7 +52,9 @@ AA needs 4.5:1 for normal text and 3:1 for large text and UI graphics.
 | `on-inverse-muted` / `-link` on `inverse`         | 10.3 / 9.0  | Pass                                            |
 | Dark `fg-muted` on canvas; text on `primary`      | 8.93 / 7.36 | Pass                                            |
 | Dark placeholder `#8391A7` on surface             | 5.39        | Pass                                            |
-| `border-default` `#CBD5E1` against white          | 1.48        | **Below 3:1** for input boundaries; see A15     |
+| `border-default` `#CBD5E1` against white          | 1.48        | Decorative borders only (not form fields)       |
+| `border-input` `#8492A6` against white            | 3.16        | Pass (WCAG 1.4.11), used for form fields (A15)  |
+| Dark `border-input` `#64748B` against surface     | 3.6         | Pass                                            |
 
 Glass panels must be re-checked whenever they sit over images or gradients.
 
