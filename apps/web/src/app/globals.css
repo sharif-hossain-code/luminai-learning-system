@@ -48,6 +48,8 @@
   /* borders */
   --border-subtle: #e2e8f0;
   --border-default: #cbd5e1;
+  /* Form field borders: 3.2:1 on white (WCAG 1.4.11). border-default stays for decorative borders. */
+  --border-input: #8492a6;
   --glass-border: rgb(255 255 255 / 0.58);
   --focus-ring: #2563eb;
   --focus-halo: #c7d7fa;
@@ -107,6 +109,7 @@
 
   --border-subtle: #24324a;
   --border-default: #334155;
+  --border-input: #64748b;
   --glass-border: rgb(255 255 255 / 0.12);
   --focus-ring: #60a5fa;
   --focus-halo: rgb(96 165 250 / 0.35);
@@ -165,6 +168,7 @@
   --color-placeholder: var(--text-placeholder);
   --color-subtle: var(--border-subtle);
   --color-default: var(--border-default);
+  --color-input: var(--border-input);
   --color-focus-halo: var(--focus-halo);
   --color-success: var(--state-success);
   --color-success-text: var(--state-success-text);
@@ -257,7 +261,7 @@
   /* Form controls: brand border plus a 3px halo on focus, as in the design. */
   .field-control {
     width: 100%;
-    border: 1px solid var(--border-default);
+    border: 1px solid var(--border-input);
     border-radius: var(--radius-md);
     background: var(--bg-surface);
     color: var(--text-primary);

@@ -44,6 +44,15 @@ import {
   updateProfileRequestSchema,
   verifyEmailRequestSchema,
 } from './identity.js';
+import {
+  enrolledCourseSchema,
+  enrollmentSchema,
+  learnerCourseSchema,
+  learnerLessonSchema,
+  lessonProgressResultSchema,
+  myEnrollmentsQuerySchema,
+  updateLessonProgressRequestSchema,
+} from './learning.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /** `editor` means content editors and administrators (ownership is checked per course). */
@@ -327,6 +336,69 @@ export const API_ROUTES: ApiRoute[] = [
     auth: 'public',
     success: { status: 200, schema: dataEnvelope(catalogCourseDetailSchema) },
     errors: [404],
+  },
+  // ---------- Enrolment and learning ----------
+  {
+    method: 'POST',
+    path: '/courses/{courseId}/enrollments',
+    operationId: 'enrol',
+    summary: 'Enrol in a published course (201), or return the existing enrolment (200)',
+    tag: 'Learning',
+    auth: 'session',
+    success: { status: 201, schema: dataEnvelope(enrollmentSchema) },
+    errors: [401, 403, 404],
+  },
+  {
+    method: 'GET',
+    path: '/courses/{courseIdOrSlug}/learning',
+    operationId: 'learnerCourse',
+    summary: 'An enrolled course with lesson states, locks, progress and the next lesson',
+    tag: 'Learning',
+    auth: 'session',
+    success: { status: 200, schema: dataEnvelope(learnerCourseSchema) },
+    errors: [401, 403, 404],
+  },
+  {
+    method: 'GET',
+    path: '/lessons/{lessonId}',
+    operationId: 'lesson',
+    summary: 'A lesson with its content, for an enrolled learner',
+    tag: 'Learning',
+    auth: 'session',
+    success: { status: 200, schema: dataEnvelope(learnerLessonSchema) },
+    errors: [401, 403, 404],
+  },
+  {
+    method: 'PUT',
+    path: '/lessons/{lessonId}/progress',
+    operationId: 'saveLessonProgress',
+    summary: 'Save lesson progress (idempotent: never goes backwards)',
+    tag: 'Learning',
+    auth: 'session',
+    body: updateLessonProgressRequestSchema,
+    success: { status: 200, schema: dataEnvelope(lessonProgressResultSchema) },
+    errors: [401, 403, 404, 422],
+  },
+  {
+    method: 'GET',
+    path: '/users/me/enrollments',
+    operationId: 'myEnrollments',
+    summary: "The signed-in learner's courses with progress, most recent first",
+    tag: 'Learning',
+    auth: 'session',
+    query: myEnrollmentsQuerySchema,
+    success: { status: 200, schema: dataEnvelope(z.array(enrolledCourseSchema)) },
+    errors: [401, 422],
+  },
+  {
+    method: 'GET',
+    path: '/users/me/continue-learning',
+    operationId: 'continueLearning',
+    summary: 'The most recent unfinished course and the lesson to resume (or null)',
+    tag: 'Learning',
+    auth: 'session',
+    success: { status: 200, schema: dataEnvelope(enrolledCourseSchema.nullable()) },
+    errors: [401],
   },
   // ---------- Content authoring ----------
   {

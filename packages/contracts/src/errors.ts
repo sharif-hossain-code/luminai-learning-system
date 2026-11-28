@@ -25,6 +25,13 @@ export const ErrorCode = {
   // Content-specific codes.
   /** fieldErrors list what to fix; `field` is the issue path (course.summary, lesson:<id> ...). */
   PUBLISH_VALIDATION_FAILED: 'PUBLISH_VALIDATION_FAILED',
+  // Learning-specific codes.
+  /** The learner must enrol in the course before opening its lessons. */
+  NOT_ENROLLED: 'NOT_ENROLLED',
+  /** The lesson's module opens after the required modules before it are complete. */
+  LESSON_LOCKED: 'LESSON_LOCKED',
+  /** The lesson's completion rule isn't met yet (e.g. the media hasn't been played to the end). */
+  COMPLETION_RULE_NOT_MET: 'COMPLETION_RULE_NOT_MET',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

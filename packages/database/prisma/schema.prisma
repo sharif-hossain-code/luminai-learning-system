@@ -70,6 +70,8 @@ model User {
   coursesOwned            Course[]                 @relation("CourseOwner")
   coursesUpdated          Course[]                 @relation("CourseUpdatedBy")
   courseVersionsPublished CourseVersion[]
+  enrollments             Enrollment[]
+  lessonProgress          LessonProgress[]
 
   @@index([roleId])
   @@map("users")
@@ -284,6 +286,7 @@ model Course {
   publishedVersion CourseVersion?  @relation("PublishedVersion", fields: [publishedVersionId], references: [id], onDelete: Restrict)
   versions         CourseVersion[] @relation("CourseVersions")
   modules          Module[]
+  enrollments      Enrollment[]
 
   @@index([status])
   @@index([ownerId, updatedAt])
@@ -315,10 +318,11 @@ model CourseVersion {
   publishedById    String?                  @map("published_by_id") @db.Uuid
   publishedAt      DateTime                 @default(now()) @map("published_at") @db.Timestamptz(3)
 
-  course      Course   @relation("CourseVersions", fields: [courseId], references: [id], onDelete: Cascade)
-  category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  publishedBy User?    @relation(fields: [publishedById], references: [id], onDelete: SetNull)
-  liveFor     Course?  @relation("PublishedVersion")
+  course      Course       @relation("CourseVersions", fields: [courseId], references: [id], onDelete: Cascade)
+  category    Category     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  publishedBy User?        @relation(fields: [publishedById], references: [id], onDelete: SetNull)
+  liveFor     Course?      @relation("PublishedVersion")
+  enrollments Enrollment[]
 
   @@unique([courseId, version])
   @@index([categoryId, level])
@@ -385,4 +389,82 @@ model LessonResource {
 
   @@index([lessonId, position])
   @@map("lesson_resources")
+}
+
+// ---------------------------------------------------------------------------
+// Enrolment and progress (Phase 4). See docs/architecture/learning-journey.md.
+//
+// A learner has at most one enrolment per course (unique user + course); enrolling
+// again is a no-op, and a withdrawn enrolment is reactivated. Learners follow the
+// course's live published version; progress is keyed by lesson id, which stays the
+// same across versions, so it carries over when a course is republished.
+// ---------------------------------------------------------------------------
+
+enum EnrollmentStatus {
+  ACTIVE
+  /// Every required lesson is complete.
+  COMPLETED
+  /// The learner left the course. Enrolling again reactivates it.
+  WITHDRAWN
+
+  @@map("enrollment_status")
+}
+
+enum LessonProgressStatus {
+  IN_PROGRESS
+  COMPLETED
+
+  @@map("lesson_progress_status")
+}
+
+model Enrollment {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String           @map("user_id") @db.Uuid
+  courseId        String           @map("course_id") @db.Uuid
+  /// The published version the learner is following (moves to the live version on access).
+  courseVersionId String           @map("course_version_id") @db.Uuid
+  status          EnrollmentStatus @default(ACTIVE)
+  /// The lesson the learner opened most recently: the resume point.
+  lastLessonId    String?          @map("last_lesson_id") @db.Uuid
+  lastActivityAt  DateTime         @default(now()) @map("last_activity_at") @db.Timestamptz(3)
+  enrolledAt      DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz(3)
+  completedAt     DateTime?        @map("completed_at") @db.Timestamptz(3)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course        Course           @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  courseVersion CourseVersion    @relation(fields: [courseVersionId], references: [id], onDelete: Restrict)
+  lessons       LessonProgress[]
+
+  @@unique([userId, courseId])
+  @@index([userId, lastActivityAt])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+/// One row per learner and lesson. `lessonId` refers to the lesson inside the
+/// published snapshot (no foreign key, so progress survives edits to the working copy).
+model LessonProgress {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String               @map("user_id") @db.Uuid
+  enrollmentId    String               @map("enrollment_id") @db.Uuid
+  lessonId        String               @map("lesson_id") @db.Uuid
+  status          LessonProgressStatus @default(IN_PROGRESS)
+  /// 0–100. Only ever increases.
+  progressPercent Int                  @default(0) @map("progress_percent")
+  /// Last playback position for video and audio lessons (resume point).
+  positionSeconds Int?                 @map("position_seconds")
+  startedAt       DateTime             @default(now()) @map("started_at") @db.Timestamptz(3)
+  completedAt     DateTime?            @map("completed_at") @db.Timestamptz(3)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([enrollmentId])
+  @@index([userId, updatedAt])
+  @@map("lesson_progress")
 }
