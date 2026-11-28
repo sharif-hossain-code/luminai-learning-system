@@ -1,0 +1,152 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens: docs/design-system/tokens.md is the source of truth.
+ * Light is the default theme; dark applies when <html data-theme="dark">.
+ * Components use the semantic Tailwind names below (bg-canvas, text-fg, ...),
+ * never raw hex values.
+ */
+
+:root {
+  color-scheme: light;
+
+  --brand-primary: #2563eb;
+  --brand-primary-fg: #ffffff;
+  --brand-secondary: #7c3aed;
+  --bg-canvas: #f5f7fb;
+  --bg-surface: #ffffff;
+  --bg-elevated: rgb(255 255 255 / 0.72);
+  --text-primary: #172033;
+  /* Spec value #64748B is 4.44:1 on canvas (below WCAG AA); darkened to pass. */
+  --text-secondary: #5b6b82;
+  --border-subtle: #e2e8f0;
+  --glass-border: rgb(255 255 255 / 0.58);
+  --state-success: #16a34a;
+  --state-success-text: #15803d;
+  --state-warning: #d97706;
+  --state-warning-text: #b45309;
+  --state-danger: #dc2626;
+  --state-danger-text: #dc2626;
+  --focus-ring: #2563eb;
+  --shadow-soft: 0 12px 36px rgb(15 23 42 / 0.08);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --brand-primary: #60a5fa;
+  --brand-primary-fg: #0b1220;
+  --brand-secondary: #a78bfa;
+  --bg-canvas: #0b1220;
+  --bg-surface: #111b2e;
+  --bg-elevated: rgb(23 32 51 / 0.72);
+  --text-primary: #f8fafc;
+  --text-secondary: #a8b4c7;
+  --border-subtle: rgb(255 255 255 / 0.12);
+  --glass-border: rgb(255 255 255 / 0.12);
+  --state-success: #4ade80;
+  --state-success-text: #4ade80;
+  --state-warning: #fbbf24;
+  --state-warning-text: #fbbf24;
+  --state-danger: #f87171;
+  --state-danger-text: #f87171;
+  --focus-ring: #60a5fa;
+  --shadow-soft: 0 12px 36px rgb(0 0 0 / 0.35);
+}
+
+@theme inline {
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SFMono-Regular', monospace;
+
+  --color-primary: var(--brand-primary);
+  --color-primary-fg: var(--brand-primary-fg);
+  --color-secondary: var(--brand-secondary);
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+  --color-fg: var(--text-primary);
+  --color-fg-muted: var(--text-secondary);
+  --color-subtle: var(--border-subtle);
+  --color-success: var(--state-success);
+  --color-success-text: var(--state-success-text);
+  --color-warning: var(--state-warning);
+  --color-warning-text: var(--state-warning-text);
+  --color-danger: var(--state-danger);
+  --color-danger-text: var(--state-danger-text);
+
+  /* Type scale (size / line height) from the design spec. */
+  --text-display: 2.25rem;
+  --text-display--line-height: 2.75rem;
+  --text-h1: 1.875rem;
+  --text-h1--line-height: 2.375rem;
+  --text-h2: 1.5rem;
+  --text-h2--line-height: 2rem;
+  --text-h3: 1.25rem;
+  --text-h3--line-height: 1.75rem;
+  --text-body: 1rem;
+  --text-body--line-height: 1.5rem;
+  --text-support: 0.875rem;
+  --text-support--line-height: 1.25rem;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+
+  /* Radius tokens: 8, 12, 16, 20, 24px. */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+
+  --shadow-soft: var(--shadow-soft);
+  --container-content: 80rem;
+}
+
+@layer base {
+  html {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Selective glassmorphism for elevated panels. Never use it for long-form text. */
+  .glass-panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 18px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass-panel {
+      background: var(--bg-elevated);
+      border-color: var(--glass-border);
+      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(16px);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
