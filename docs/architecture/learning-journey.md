@@ -29,7 +29,8 @@ Errors: 403 `NOT_ENROLLED`, 403 `LESSON_LOCKED`, 422 `COMPLETION_RULE_NOT_MET`.
 - **Required lessons**: a lesson counts towards completion when it and its module are required. A course with no required lessons counts all of them.
 - **Locks**: modules open in order; a module is locked while a required module before it has required lessons left. Started lessons stay open.
 - **Completion rules**: mark complete (button), view (opening the lesson), finish the media (95% played).
-- **Progress percentage** is rounded down, so a course never shows 100% until it is complete.
+- **Progress percentage** is rounded down, so a course never shows 100% until it is complete. It counts required lessons and required quizzes.
+- **Quizzes** (Phase 5, [assessments.md](assessments.md)): a module's steps are its lessons, then its quizzes. A required quiz must be passed before the module counts as complete, so it gates later modules and course completion. A quiz is locked with its module. Final assessments come after the last module and open when everything else required is done. The next step (`nextLesson`, now with `kind: 'LESSON' | 'ASSESSMENT'`) skips quizzes the learner is out of attempts on.
 - **Next lesson**: the last lesson opened if unfinished, otherwise the next open unfinished lesson after it, otherwise the first one in the course.
 
 ## Web

@@ -68,4 +68,10 @@ export class LearningController {
   async continueLearning(@CurrentAuth() auth: AuthContext) {
     return { data: await this.learning.continueLearning(auth.userId) };
   }
+
+  /** Dashboard "Up next": required quizzes that are open and not passed yet. */
+  @Get('users/me/up-next')
+  async upNext(@CurrentAuth() auth: AuthContext) {
+    return { data: await this.learning.upNext(auth.userId) };
+  }
 }

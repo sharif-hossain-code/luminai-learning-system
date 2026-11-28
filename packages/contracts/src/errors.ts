@@ -32,6 +32,13 @@ export const ErrorCode = {
   LESSON_LOCKED: 'LESSON_LOCKED',
   /** The lesson's completion rule isn't met yet (e.g. the media hasn't been played to the end). */
   COMPLETION_RULE_NOT_MET: 'COMPLETION_RULE_NOT_MET',
+  // Assessment-specific codes.
+  /** The assessment opens once the required lessons and quizzes before it are done. */
+  ASSESSMENT_LOCKED: 'ASSESSMENT_LOCKED',
+  /** Every allowed attempt has been used. */
+  ATTEMPT_LIMIT_REACHED: 'ATTEMPT_LIMIT_REACHED',
+  /** The attempt was already submitted; its answers can't change. */
+  ATTEMPT_SUBMITTED: 'ATTEMPT_SUBMITTED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

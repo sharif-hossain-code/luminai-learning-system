@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type { CourseSnapshot } from '@luminai/contracts';
+import type { CourseSnapshot, SnapshotAssessment } from '@luminai/contracts';
 import { describe, expect, it } from 'vitest';
-import { buildJourney, type ProgressRow } from './journey.js';
+import { buildJourney, type AssessmentRow, type ProgressRow } from './journey.js';
 
 type LessonSpec = { minutes?: number; required?: boolean };
 
@@ -27,6 +27,7 @@ function snapshot(
       keywords: [],
       coverObjectKey: null,
     },
+    assessments: [],
     modules: modules.map((module, m) => ({
       id: randomUUID(),
       title: `Module ${m + 1}`,
@@ -56,6 +57,7 @@ describe('buildJourney', () => {
     const journey = buildJourney(course, [], null);
 
     expect(journey.nextLesson).toMatchObject({
+      kind: 'LESSON',
       id: course.ids[0]![0],
       moduleNumber: 1,
       lessonNumber: 1,
@@ -68,6 +70,8 @@ describe('buildJourney', () => {
       completedLessons: 0,
       requiredLessons: 3,
       totalLessons: 3,
+      passedAssessments: 0,
+      requiredAssessments: 0,
       percent: 0,
       remainingMinutes: 30,
     });
@@ -138,5 +142,156 @@ describe('buildJourney', () => {
     const second = journey.modules[1]!;
     expect(second.locked).toBe(false);
     expect(second.lessons.map((lesson) => lesson.locked)).toEqual([false, true]);
+  });
+});
+
+// ---------- Assessments ----------
+
+function quiz(
+  moduleId: string | null,
+  options: { required?: boolean; maxAttempts?: number | null; minutes?: number } = {},
+): SnapshotAssessment {
+  return {
+    id: randomUUID(),
+    moduleId,
+    title: moduleId ? 'Module quiz' : 'Final assessment',
+    instructions: '',
+    isRequired: options.required ?? true,
+    passPercent: 70,
+    maxAttempts: options.maxAttempts ?? null,
+    feedbackMode: 'FULL',
+    estimatedMinutes: options.minutes ?? 5,
+    questions: [],
+  };
+}
+
+const passed = (assessmentId: string, attemptsUsed = 1): AssessmentRow => ({
+  assessmentId,
+  passed: true,
+  attemptsUsed,
+  open: false,
+});
+const failed = (assessmentId: string, attemptsUsed = 1): AssessmentRow => ({
+  assessmentId,
+  passed: false,
+  attemptsUsed,
+  open: false,
+});
+
+describe('buildJourney with assessments', () => {
+  it('places a module quiz after its lessons and offers it once the lessons are done', () => {
+    const course = snapshot([{ lessons: [{}] }, { lessons: [{}] }]);
+    const moduleQuiz = quiz(course.modules[0]!.id);
+    course.assessments = [moduleQuiz];
+    const lesson = course.ids[0]![0]!;
+    const journey = buildJourney(course, [done(lesson)], lesson);
+
+    expect(journey.steps.map((step) => step.kind)).toEqual(['LESSON', 'ASSESSMENT', 'LESSON']);
+    expect(journey.modules[0]!.assessments).toEqual([
+      expect.objectContaining({ id: moduleQuiz.id, state: 'NOT_STARTED', locked: false }),
+    ]);
+    expect(journey.nextLesson).toMatchObject({
+      kind: 'ASSESSMENT',
+      id: moduleQuiz.id,
+      type: null,
+      moduleNumber: 1,
+      lessonNumber: null,
+    });
+    // The quiz is required, so the module isn't done and the next module stays locked.
+    expect(journey.modules[0]!.state).toBe('IN_PROGRESS');
+    expect(journey.modules[1]!.locked).toBe(true);
+    expect(journey.progress).toMatchObject({
+      completedLessons: 1,
+      requiredLessons: 2,
+      passedAssessments: 0,
+      requiredAssessments: 1,
+      percent: 33,
+      remainingMinutes: 15,
+    });
+  });
+
+  it('opens the next module and counts progress once the quiz is passed', () => {
+    const course = snapshot([{ lessons: [{}] }, { lessons: [{}] }]);
+    const moduleQuiz = quiz(course.modules[0]!.id);
+    course.assessments = [moduleQuiz];
+    const lesson = course.ids[0]![0]!;
+    const journey = buildJourney(course, [done(lesson)], lesson, [passed(moduleQuiz.id)]);
+    expect(journey.modules[0]!.state).toBe('COMPLETED');
+    expect(journey.modules[1]!.locked).toBe(false);
+    expect(journey.nextLesson).toMatchObject({ kind: 'LESSON', id: course.ids[1]![0] });
+    expect(journey.progress.percent).toBe(66);
+  });
+
+  it('needs every required assessment passed before the course completes', () => {
+    const course = snapshot([{ lessons: [{}] }]);
+    const final = quiz(null);
+    const optional = quiz(null, { required: false });
+    course.assessments = [final, optional];
+    const lesson = course.ids[0]![0]!;
+
+    const lessonsOnly = buildJourney(course, [done(lesson)], lesson);
+    expect(lessonsOnly.complete).toBe(false);
+    expect(lessonsOnly.finalAssessments.map((a) => a.locked)).toEqual([false, false]);
+    expect(lessonsOnly.nextLesson).toMatchObject({ id: final.id, moduleNumber: null });
+
+    const failedOnce = buildJourney(course, [done(lesson)], lesson, [failed(final.id)]);
+    expect(failedOnce.complete).toBe(false);
+    expect(failedOnce.finalAssessments[0]!.state).toBe('IN_PROGRESS');
+
+    const passedFinal = buildJourney(course, [done(lesson)], lesson, [passed(final.id, 2)]);
+    expect(passedFinal.complete).toBe(true);
+    expect(passedFinal.progress).toMatchObject({ percent: 100, remainingMinutes: 0 });
+  });
+
+  it('keeps course-level assessments locked until the required modules are done', () => {
+    const course = snapshot([{ lessons: [{}, {}] }]);
+    const final = quiz(null);
+    course.assessments = [final];
+    const journey = buildJourney(course, [done(course.ids[0]![0]!)], null);
+    expect(journey.finalAssessments[0]!.locked).toBe(true);
+  });
+
+  it('locks a quiz with its module, but keeps a started quiz open', () => {
+    const course = snapshot([{ lessons: [{}] }, { lessons: [{}] }]);
+    const secondQuiz = quiz(course.modules[1]!.id);
+    course.assessments = [secondQuiz];
+    expect(buildJourney(course, [], null).modules[1]!.assessments[0]!.locked).toBe(true);
+    const open: AssessmentRow = {
+      assessmentId: secondQuiz.id,
+      passed: false,
+      attemptsUsed: 0,
+      open: true,
+    };
+    expect(buildJourney(course, [], null, [open]).modules[1]!.assessments[0]!.locked).toBe(false);
+  });
+
+  it("doesn't count optional quizzes or quizzes in optional modules", () => {
+    const course = snapshot([{ required: false, lessons: [{}] }, { lessons: [{}] }]);
+    course.assessments = [
+      quiz(course.modules[0]!.id),
+      quiz(course.modules[1]!.id, { required: false }),
+    ];
+    const lesson = course.ids[1]![0]!;
+    const journey = buildJourney(course, [done(lesson)], lesson);
+    expect(journey.progress.requiredAssessments).toBe(0);
+    expect(journey.complete).toBe(true);
+  });
+
+  it('skips a quiz with no attempts left when choosing what comes next', () => {
+    const course = snapshot([{ lessons: [{}] }]);
+    const capped = quiz(course.modules[0]!.id, { maxAttempts: 2 });
+    course.assessments = [capped];
+    const lesson = course.ids[0]![0]!;
+    const journey = buildJourney(course, [done(lesson)], lesson, [failed(capped.id, 2)]);
+    expect(journey.modules[0]!.assessments[0]).toMatchObject({ outOfAttempts: true });
+    expect(journey.nextLesson).toBeNull();
+    expect(journey.complete).toBe(false);
+  });
+
+  it('reads version 1 snapshots, which have no assessments', () => {
+    const course = snapshot([{ lessons: [{}] }]);
+    const journey = buildJourney(course, [], null);
+    expect(journey.assessments).toEqual([]);
+    expect(journey.finalAssessments).toEqual([]);
   });
 });

@@ -38,28 +38,39 @@ export const enrollmentSchema = z.object({
 });
 export type Enrollment = z.infer<typeof enrollmentSchema>;
 
-/** Course progress counts required lessons only (lessons in optional modules are optional). */
+/**
+ * Course progress counts required items only: required lessons in required
+ * modules, and required assessments (which count once passed).
+ */
 export const courseProgressSchema = z.object({
   completedLessons: z.number().int(),
   requiredLessons: z.number().int(),
   totalLessons: z.number().int(),
-  /** 0–100, rounded down so a course never shows 100% before it is complete. */
+  passedAssessments: z.number().int(),
+  requiredAssessments: z.number().int(),
+  /** 0–100 over required lessons and assessments, rounded down so a course never shows 100% early. */
   percent: z.number().int().min(0).max(100),
-  /** Estimated minutes left in the required lessons that aren't complete. */
+  /** Estimated minutes left in the required lessons and assessments that aren't done. */
   remainingMinutes: z.number().int(),
 });
 export type CourseProgress = z.infer<typeof courseProgressSchema>;
 
-/** Where to pick up: the lesson to open next, with its place in the course. */
+/**
+ * Where to pick up: the next step to open (a lesson, or an assessment the learner
+ * still has to pass), with its place in the course.
+ */
 export const nextLessonSchema = z.object({
+  kind: z.enum(['LESSON', 'ASSESSMENT']),
   id: z.uuid(),
   title: z.string(),
-  type: lessonTypeSchema,
+  /** The lesson type; null for assessments. */
+  type: lessonTypeSchema.nullable(),
   estimatedMinutes: z.number().int(),
-  /** 1-based module number and lesson number within the module. */
-  moduleNumber: z.number().int(),
-  lessonNumber: z.number().int(),
-  moduleTitle: z.string(),
+  /** 1-based module number; null for a course-level (final) assessment. */
+  moduleNumber: z.number().int().nullable(),
+  /** 1-based lesson number within the module; null for assessments. */
+  lessonNumber: z.number().int().nullable(),
+  moduleTitle: z.string().nullable(),
   state: progressStateSchema,
 });
 export type NextLesson = z.infer<typeof nextLessonSchema>;
@@ -88,6 +99,20 @@ export const learnerLessonOutlineSchema = z.object({
 });
 export type LearnerLessonOutline = z.infer<typeof learnerLessonOutlineSchema>;
 
+/** A quiz in the outline. COMPLETED means passed; IN_PROGRESS means started but not passed. */
+export const learnerAssessmentOutlineSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  estimatedMinutes: z.number().int(),
+  questionCount: z.number().int(),
+  isRequired: z.boolean(),
+  state: progressStateSchema,
+  locked: z.boolean(),
+  /** Every allowed attempt is used and the assessment isn't passed. */
+  outOfAttempts: z.boolean(),
+});
+export type LearnerAssessmentOutline = z.infer<typeof learnerAssessmentOutlineSchema>;
+
 export const learnerModuleOutlineSchema = z.object({
   id: z.uuid(),
   title: z.string(),
@@ -97,6 +122,8 @@ export const learnerModuleOutlineSchema = z.object({
   /** Modules open in order: a module is locked until the required modules before it are done. */
   locked: z.boolean(),
   lessons: z.array(learnerLessonOutlineSchema),
+  /** Quizzes at the end of the module. */
+  assessments: z.array(learnerAssessmentOutlineSchema),
 });
 export type LearnerModuleOutline = z.infer<typeof learnerModuleOutlineSchema>;
 
@@ -106,6 +133,8 @@ export const learnerCourseSchema = courseHeaderSchema.extend({
   /** Null once every lesson the learner can open is complete. */
   nextLesson: nextLessonSchema.nullable(),
   modules: z.array(learnerModuleOutlineSchema),
+  /** Course-level assessments, after the last module. */
+  finalAssessments: z.array(learnerAssessmentOutlineSchema),
 });
 export type LearnerCourse = z.infer<typeof learnerCourseSchema>;
 
@@ -159,8 +188,15 @@ export const learnerLessonSchema = z.object({
   /** 1-based position within the module. */
   lessonNumber: z.number().int(),
   previousLessonId: z.uuid().nullable(),
-  /** The next lesson in course order, and whether it is still locked. */
-  next: z.object({ id: z.uuid(), title: z.string(), locked: z.boolean() }).nullable(),
+  /** The next step in course order (a lesson or a quiz), and whether it is still locked. */
+  next: z
+    .object({
+      kind: z.enum(['LESSON', 'ASSESSMENT']),
+      id: z.uuid(),
+      title: z.string(),
+      locked: z.boolean(),
+    })
+    .nullable(),
   progress: lessonProgressSchema,
 });
 export type LearnerLesson = z.infer<typeof learnerLessonSchema>;

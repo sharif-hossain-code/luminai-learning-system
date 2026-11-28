@@ -1,11 +1,17 @@
 import 'server-only';
 import {
+  attemptSchema,
   enrolledCourseSchema,
+  learnerAssessmentSchema,
   learnerCourseSchema,
   learnerLessonSchema,
+  upNextAssessmentSchema,
+  type Attempt,
   type EnrolledCourse,
+  type LearnerAssessment,
   type LearnerCourse,
   type LearnerLesson,
+  type UpNextAssessment,
 } from '@luminai/contracts';
 import { z } from 'zod';
 import { ServerApiError, serverGet } from './server-api';
@@ -66,5 +72,45 @@ export function getContinueLearning(): Promise<EnrolledCourse | null> {
   return serverGet('/users/me/continue-learning', data(enrolledCourseSchema.nullable()));
 }
 
-/** Where a course's lessons live in the web app. */
-export const lessonHref = (slug: string, lessonId: string) => `/learn/${slug}/${lessonId}`;
+export function getUpNext(): Promise<UpNextAssessment[]> {
+  return serverGet('/users/me/up-next', data(z.array(upNextAssessmentSchema)));
+}
+
+export type AssessmentAccess =
+  | { state: 'open'; assessment: LearnerAssessment }
+  | { state: 'locked' }
+  | { state: 'not-enrolled' }
+  | null;
+
+export async function getAssessment(assessmentId: string): Promise<AssessmentAccess> {
+  try {
+    return {
+      state: 'open',
+      assessment: await serverGet(
+        `/assessments/${encodeURIComponent(assessmentId)}`,
+        data(learnerAssessmentSchema),
+      ),
+    };
+  } catch (error) {
+    if (error instanceof ServerApiError) {
+      if (error.code === 'ASSESSMENT_LOCKED') return { state: 'locked' };
+      if (error.code === 'NOT_ENROLLED') return { state: 'not-enrolled' };
+      if (error.status === 404 || error.status === 422) return null;
+    }
+    throw error;
+  }
+}
+
+/** One of the learner's attempts, or null (not theirs, or unknown). */
+export async function getAttempt(attemptId: string): Promise<Attempt | null> {
+  try {
+    return await serverGet(`/attempts/${encodeURIComponent(attemptId)}`, data(attemptSchema));
+  } catch (error) {
+    if (error instanceof ServerApiError && (error.status === 404 || error.status === 422)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export { assessmentHref, attemptHref, lessonHref, stepHref } from './learning-links';

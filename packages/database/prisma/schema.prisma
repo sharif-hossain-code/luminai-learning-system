@@ -72,6 +72,7 @@ model User {
   courseVersionsPublished CourseVersion[]
   enrollments             Enrollment[]
   lessonProgress          LessonProgress[]
+  assessmentAttempts      AssessmentAttempt[]
 
   @@index([roleId])
   @@map("users")
@@ -287,6 +288,8 @@ model Course {
   versions         CourseVersion[] @relation("CourseVersions")
   modules          Module[]
   enrollments      Enrollment[]
+  /// Quizzes in the working copy: module quizzes and course-level (final) assessments.
+  assessments      Assessment[]
 
   @@index([status])
   @@index([ownerId, updatedAt])
@@ -318,11 +321,12 @@ model CourseVersion {
   publishedById    String?                  @map("published_by_id") @db.Uuid
   publishedAt      DateTime                 @default(now()) @map("published_at") @db.Timestamptz(3)
 
-  course      Course       @relation("CourseVersions", fields: [courseId], references: [id], onDelete: Cascade)
-  category    Category     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  publishedBy User?        @relation(fields: [publishedById], references: [id], onDelete: SetNull)
-  liveFor     Course?      @relation("PublishedVersion")
+  course      Course              @relation("CourseVersions", fields: [courseId], references: [id], onDelete: Cascade)
+  category    Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  publishedBy User?               @relation(fields: [publishedById], references: [id], onDelete: SetNull)
+  liveFor     Course?             @relation("PublishedVersion")
   enrollments Enrollment[]
+  attempts    AssessmentAttempt[]
 
   @@unique([courseId, version])
   @@index([categoryId, level])
@@ -341,8 +345,9 @@ model Module {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lessons Lesson[]
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  assessments Assessment[]
 
   @@index([courseId, position])
   @@map("modules")
@@ -432,10 +437,11 @@ model Enrollment {
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course        Course           @relation(fields: [courseId], references: [id], onDelete: Restrict)
-  courseVersion CourseVersion    @relation(fields: [courseVersionId], references: [id], onDelete: Restrict)
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course        Course              @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  courseVersion CourseVersion       @relation(fields: [courseVersionId], references: [id], onDelete: Restrict)
   lessons       LessonProgress[]
+  attempts      AssessmentAttempt[]
 
   @@unique([userId, courseId])
   @@index([userId, lastActivityAt])
@@ -467,4 +473,162 @@ model LessonProgress {
   @@index([enrollmentId])
   @@index([userId, updatedAt])
   @@map("lesson_progress")
+}
+
+// ---------------------------------------------------------------------------
+// Assessments (Phase 5). See docs/architecture/assessments.md and ADR-006.
+//
+// `assessments` and `questions` are part of the course working copy: editing them
+// bumps the course's draft revision, and publishing copies them (answer keys
+// included) into the immutable snapshot. Answer keys never leave the server in
+// learner responses. Attempts point at the published version they were taken
+// against, so a later republish never changes a submitted attempt.
+// ---------------------------------------------------------------------------
+
+enum QuestionType {
+  /// One correct option.
+  SINGLE_CHOICE
+  /// Every correct option, and nothing else, must be selected.
+  MULTIPLE_CHOICE
+  /// Two fixed options, "true" and "false".
+  TRUE_FALSE
+  /// A short typed answer, matched against accepted answers.
+  SHORT_TEXT
+  /// A longer written answer. Not scored: it gets rubric-based AI feedback.
+  WRITING
+
+  @@map("question_type")
+}
+
+/**
+ * What a learner sees after submitting.
+ */
+enum AssessmentFeedbackMode {
+  /// The score and pass/fail only.
+  SCORE_ONLY
+  /// Which questions were right or wrong, without the correct answers.
+  CORRECTNESS
+  /// Right and wrong, the correct answers and the explanations.
+  FULL
+
+  @@map("assessment_feedback_mode")
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  /// Submitted and scored. Final: answers can't change.
+  SUBMITTED
+
+  @@map("attempt_status")
+}
+
+model Assessment {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId         String                 @map("course_id") @db.Uuid
+  /// The module the quiz ends. Null: a course-level (final) assessment after the last module.
+  moduleId         String?                @map("module_id") @db.Uuid
+  title            String
+  instructions     String                 @default("")
+  /// 0-based order among the assessments of the same module (or of the course level).
+  position         Int
+  isRequired       Boolean                @default(true) @map("is_required")
+  /// Percentage of the scored points needed to pass (0–100).
+  passPercent      Int                    @default(70) @map("pass_percent")
+  /// Null means unlimited attempts.
+  maxAttempts      Int?                   @map("max_attempts")
+  feedbackMode     AssessmentFeedbackMode @default(FULL) @map("feedback_mode")
+  estimatedMinutes Int                    @default(10) @map("estimated_minutes")
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module    Module?    @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@index([courseId, moduleId, position])
+  @@index([moduleId])
+  @@map("assessments")
+}
+
+model Question {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assessmentId String       @map("assessment_id") @db.Uuid
+  type         QuestionType @default(SINGLE_CHOICE)
+  prompt       String       @default("")
+  /// [{ id, text }] for choice questions; validated in code (@luminai/contracts).
+  options      Json         @default("[]")
+  /// Protected: { correctOptionIds?, acceptedAnswers? }. Never sent to learners.
+  answerKey    Json         @default("{}") @map("answer_key")
+  /// Shown after submitting when the feedback mode is FULL.
+  explanation  String       @default("")
+  /// Writing questions: { criteria: [{ id, label, description }], minWords?, maxWords? }.
+  rubric       Json         @default("{}")
+  /// Scored questions are worth at least 1 point; writing questions are worth 0.
+  points       Int          @default(1)
+  position     Int
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId, position])
+  @@map("questions")
+}
+
+/// One learner's attempt at an assessment. `assessmentId` refers to the assessment
+/// inside the published snapshot (no foreign key, like lesson progress), and
+/// `courseVersionId` pins the exact version the questions came from.
+model AssessmentAttempt {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  enrollmentId    String        @map("enrollment_id") @db.Uuid
+  courseVersionId String        @map("course_version_id") @db.Uuid
+  assessmentId    String        @map("assessment_id") @db.Uuid
+  /// 1-based, per learner and assessment.
+  attemptNumber   Int           @map("attempt_number")
+  status          AttemptStatus @default(IN_PROGRESS)
+  score           Int?
+  /// Sum of the points of the scored questions in the pinned version.
+  maxScore        Int           @map("max_score")
+  /// 0–100, rounded down.
+  percent         Int?
+  passed          Boolean?
+  startedAt       DateTime      @default(now()) @map("started_at") @db.Timestamptz(3)
+  submittedAt     DateTime?     @map("submitted_at") @db.Timestamptz(3)
+  /// When written feedback (AI, rubric-based) finished. Null while pending or when there is none.
+  evaluatedAt     DateTime?     @map("evaluated_at") @db.Timestamptz(3)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enrollment    Enrollment      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  courseVersion CourseVersion   @relation(fields: [courseVersionId], references: [id], onDelete: Restrict)
+  answers       AttemptAnswer[]
+
+  @@unique([userId, assessmentId, attemptNumber])
+  @@index([userId, submittedAt])
+  @@index([enrollmentId])
+  @@map("assessment_attempts")
+}
+
+model AttemptAnswer {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attemptId     String   @map("attempt_id") @db.Uuid
+  /// A question inside the attempt's pinned snapshot.
+  questionId    String   @map("question_id") @db.Uuid
+  /// { optionIds: [...] } or { text: "..." }, validated against the question type.
+  response      Json
+  /// Set when the attempt is submitted.
+  awardedPoints Int?     @map("awarded_points")
+  /// Null for questions that aren't scored (writing).
+  isCorrect     Boolean? @map("is_correct")
+  /// Rubric-based AI feedback for writing answers (clearly marked as AI-generated).
+  feedback      Json?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  attempt AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@map("attempt_answers")
 }

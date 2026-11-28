@@ -11,11 +11,12 @@ import {
   type LessonProgress,
   type LessonProgressResult,
   type UpdateLessonProgressRequest,
+  type UpNextAssessment,
 } from '@luminai/contracts';
 import { CourseStatus, EnrollmentStatus, Prisma } from '@luminai/database';
 import { AppError } from '../common/app-error.js';
 import { PrismaService } from '../database/prisma.service.js';
-import { buildJourney, type Journey } from './journey.js';
+import { buildJourney, type AssessmentRow, type Journey } from './journey.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -46,14 +47,43 @@ type CourseRow = Prisma.CourseGetPayload<{ select: typeof courseSelect }>;
 type EnrollmentRow = Prisma.EnrollmentGetPayload<object>;
 type VersionRow = Prisma.CourseVersionGetPayload<{ select: typeof versionSelect }>;
 
-interface LoadedEnrollment {
+export interface LoadedEnrollment {
   enrollment: EnrollmentRow;
   course: CourseRow;
   version: VersionRow;
   snapshot: CourseSnapshot;
   rows: ProgressRowFull[];
+  assessmentRows: AssessmentRow[];
   journey: Journey;
 }
+
+/** Summarises a learner's attempts per assessment for the journey rules. */
+export function summariseAttempts(
+  attempts: readonly { assessmentId: string; status: string; passed: boolean | null }[],
+): AssessmentRow[] {
+  const rows = new Map<string, AssessmentRow>();
+  for (const attempt of attempts) {
+    const row = rows.get(attempt.assessmentId) ?? {
+      assessmentId: attempt.assessmentId,
+      passed: false,
+      attemptsUsed: 0,
+      open: false,
+    };
+    if (attempt.status === 'IN_PROGRESS') row.open = true;
+    else {
+      row.attemptsUsed += 1;
+      if (attempt.passed) row.passed = true;
+    }
+    rows.set(attempt.assessmentId, row);
+  }
+  return [...rows.values()];
+}
+
+const attemptSummarySelect = {
+  assessmentId: true,
+  status: true,
+  passed: true,
+} satisfies Prisma.AssessmentAttemptSelect;
 
 type ProgressRowFull = Prisma.LessonProgressGetPayload<object>;
 
@@ -116,6 +146,10 @@ function header(course: CourseRow, version: VersionRow, snapshot: CourseSnapshot
 /** JSON that `snapshot @> ...` matches when the snapshot contains the lesson. */
 const containsLesson = (lessonId: string) =>
   JSON.stringify({ modules: [{ lessons: [{ id: lessonId }] }] });
+
+/** JSON that `snapshot @> ...` matches when the snapshot contains the assessment. */
+const containsAssessment = (assessmentId: string) =>
+  JSON.stringify({ assessments: [{ id: assessmentId }] });
 
 /**
  * Enrolment, lesson access and progress. The learner always comes from the
@@ -193,6 +227,7 @@ export class LearningService {
       progress: loaded.journey.progress,
       nextLesson: loaded.journey.nextLesson,
       modules: loaded.journey.modules,
+      finalAssessments: loaded.journey.finalAssessments,
     };
   }
 
@@ -204,7 +239,10 @@ export class LearningService {
     this.assertUnlocked(journey, index);
 
     const previous = journey.lessons[index - 1];
-    const next = journey.lessons[index + 1];
+    const stepIndex = journey.steps.findIndex(
+      (step) => step.kind === 'LESSON' && step.lesson.id === lessonId,
+    );
+    const next = journey.steps[stepIndex + 1];
     const { lesson, module } = placed;
     return {
       id: lesson.id,
@@ -232,7 +270,16 @@ export class LearningService {
       },
       lessonNumber: placed.lessonNumber,
       previousLessonId: previous?.lesson.id ?? null,
-      next: next ? { id: next.lesson.id, title: next.lesson.title, locked: next.locked } : null,
+      next: next
+        ? next.kind === 'LESSON'
+          ? { kind: 'LESSON', id: next.lesson.id, title: next.lesson.title, locked: next.locked }
+          : {
+              kind: 'ASSESSMENT',
+              id: next.assessment.id,
+              title: next.assessment.title,
+              locked: next.locked,
+            }
+        : null,
       progress: toLessonProgress(loaded.rows.find((row) => row.lessonId === lessonId)),
     };
   }
@@ -249,7 +296,11 @@ export class LearningService {
           : { not: EnrollmentStatus.WITHDRAWN };
     const enrollments = await this.prisma.client.enrollment.findMany({
       where: { userId, status },
-      include: { course: { select: courseSelect }, lessons: true },
+      include: {
+        course: { select: courseSelect },
+        lessons: true,
+        attempts: { select: attemptSummarySelect },
+      },
       orderBy: [{ lastActivityAt: 'desc' }, { id: 'asc' }],
       take: 100,
     });
@@ -263,10 +314,15 @@ export class LearningService {
       ).map((version) => [version.id, version]),
     );
 
-    return enrollments.map(({ course, lessons, ...enrollment }) => {
+    return enrollments.map(({ course, lessons, attempts, ...enrollment }) => {
       const version = versions.get(effectiveVersionId(course, enrollment))!;
       const snapshot = courseSnapshotSchema.parse(version.snapshot);
-      const journey = buildJourney(snapshot, lessons, enrollment.lastLessonId);
+      const journey = buildJourney(
+        snapshot,
+        lessons,
+        enrollment.lastLessonId,
+        summariseAttempts(attempts),
+      );
       return {
         ...header(course, version, snapshot),
         enrollment: toEnrollment(enrollment),
@@ -280,6 +336,57 @@ export class LearningService {
   async continueLearning(userId: string): Promise<EnrolledCourse | null> {
     const courses = await this.myEnrollments(userId, 'in-progress');
     return courses.find((course) => course.nextLesson !== null) ?? null;
+  }
+
+  /**
+   * Dashboard "Up next": open, required assessments not passed yet (with attempts
+   * left), across active courses, most recently active course first.
+   */
+  async upNext(userId: string, limit = 3): Promise<UpNextAssessment[]> {
+    const enrollments = await this.prisma.client.enrollment.findMany({
+      where: { userId, status: EnrollmentStatus.ACTIVE },
+      include: {
+        course: { select: courseSelect },
+        lessons: true,
+        attempts: { select: attemptSummarySelect },
+      },
+      orderBy: [{ lastActivityAt: 'desc' }, { id: 'asc' }],
+      take: 50,
+    });
+    if (!enrollments.length) return [];
+    const versions = new Map(
+      (
+        await this.prisma.client.courseVersion.findMany({
+          where: { id: { in: enrollments.map((e) => effectiveVersionId(e.course, e)) } },
+          select: versionSelect,
+        })
+      ).map((version) => [version.id, version]),
+    );
+    const items: UpNextAssessment[] = [];
+    for (const { course, lessons, attempts, ...enrollment } of enrollments) {
+      const version = versions.get(effectiveVersionId(course, enrollment))!;
+      const snapshot = courseSnapshotSchema.parse(version.snapshot);
+      const journey = buildJourney(
+        snapshot,
+        lessons,
+        enrollment.lastLessonId,
+        summariseAttempts(attempts),
+      );
+      for (const item of journey.assessments) {
+        if (!item.required || item.locked || item.passed || item.outOfAttempts) continue;
+        items.push({
+          id: item.assessment.id,
+          title: item.assessment.title,
+          questionCount: item.assessment.questions.length,
+          estimatedMinutes: item.assessment.estimatedMinutes,
+          inProgress: attempts.some(
+            (a) => a.assessmentId === item.assessment.id && a.status === 'IN_PROGRESS',
+          ),
+          course: { id: course.id, slug: course.slug, title: snapshot.course.title },
+        });
+      }
+    }
+    return items.slice(0, limit);
   }
 
   // ---------- Progress ----------
@@ -346,22 +453,8 @@ export class LearningService {
         created_at AS "createdAt", updated_at AS "updatedAt"`;
 
     const rows = [...loaded.rows.filter((r) => r.lessonId !== lessonId), row!];
-    const journey = buildJourney(loaded.snapshot, rows, lessonId);
-
-    // Course completion is recorded once: only an ACTIVE enrolment moves to COMPLETED.
-    let enrollment = await this.prisma.client.enrollment.update({
-      where: { id: userEnrollment.id },
-      data: { lastLessonId: lessonId, lastActivityAt: now },
-    });
-    if (journey.complete && enrollment.status === EnrollmentStatus.ACTIVE) {
-      await this.prisma.client.enrollment.updateMany({
-        where: { id: enrollment.id, status: EnrollmentStatus.ACTIVE },
-        data: { status: EnrollmentStatus.COMPLETED, completedAt: now },
-      });
-      enrollment = await this.prisma.client.enrollment.findUniqueOrThrow({
-        where: { id: enrollment.id },
-      });
-    }
+    const journey = buildJourney(loaded.snapshot, rows, lessonId, loaded.assessmentRows);
+    const enrollment = await this.recordActivity(userEnrollment.id, journey, now, lessonId);
 
     return {
       lessonId,
@@ -373,6 +466,32 @@ export class LearningService {
         nextLesson: journey.nextLesson,
       },
     };
+  }
+
+  /**
+   * Notes the learner's activity and records course completion once: only an
+   * ACTIVE enrolment moves to COMPLETED, so a later republish never undoes it.
+   */
+  async recordActivity(
+    enrollmentId: string,
+    journey: Journey,
+    now: Date,
+    lastLessonId?: string,
+  ): Promise<EnrollmentRow> {
+    let enrollment = await this.prisma.client.enrollment.update({
+      where: { id: enrollmentId },
+      data: { lastActivityAt: now, ...(lastLessonId ? { lastLessonId } : {}) },
+    });
+    if (journey.complete && enrollment.status === EnrollmentStatus.ACTIVE) {
+      await this.prisma.client.enrollment.updateMany({
+        where: { id: enrollment.id, status: EnrollmentStatus.ACTIVE },
+        data: { status: EnrollmentStatus.COMPLETED, completedAt: now },
+      });
+      enrollment = await this.prisma.client.enrollment.findUniqueOrThrow({
+        where: { id: enrollment.id },
+      });
+    }
+    return enrollment;
   }
 
   // ---------- Loading ----------
@@ -390,13 +509,17 @@ export class LearningService {
   /** The enrolment, version and progress for a course; moves the learner to the live version. */
   private async load(course: CourseRow, enrollment: EnrollmentRow): Promise<LoadedEnrollment> {
     const versionId = effectiveVersionId(course, enrollment);
-    const [version, rows] = await Promise.all([
+    const [version, rows, attempts] = await Promise.all([
       this.prisma.client.courseVersion.findUniqueOrThrow({
         where: { id: versionId },
         select: versionSelect,
       }),
       this.prisma.client.lessonProgress.findMany({
         where: { userId: enrollment.userId, enrollmentId: enrollment.id },
+      }),
+      this.prisma.client.assessmentAttempt.findMany({
+        where: { userId: enrollment.userId, enrollmentId: enrollment.id },
+        select: attemptSummarySelect,
       }),
     ]);
     if (enrollment.courseVersionId !== versionId) {
@@ -406,13 +529,15 @@ export class LearningService {
       });
     }
     const snapshot = courseSnapshotSchema.parse(version.snapshot);
+    const assessmentRows = summariseAttempts(attempts);
     return {
       enrollment,
       course,
       version,
       snapshot,
       rows,
-      journey: buildJourney(snapshot, rows, enrollment.lastLessonId),
+      assessmentRows,
+      journey: buildJourney(snapshot, rows, enrollment.lastLessonId, assessmentRows),
     };
   }
 
@@ -421,8 +546,30 @@ export class LearningService {
    * 403 NOT_ENROLLED when the lesson belongs to a live course they haven't joined,
    * 404 when it isn't part of any course they could open.
    */
-  private async loadForLesson(userId: string, lessonId: string): Promise<LoadedEnrollment> {
-    const needle = containsLesson(lessonId);
+  private loadForLesson(userId: string, lessonId: string): Promise<LoadedEnrollment> {
+    return this.loadContaining(userId, containsLesson(lessonId), 'Lesson');
+  }
+
+  /** Like the lesson lookup: the learner's enrolment whose current version contains the assessment. */
+  loadForAssessment(userId: string, assessmentId: string): Promise<LoadedEnrollment> {
+    return this.loadContaining(userId, containsAssessment(assessmentId), 'Assessment');
+  }
+
+  /** Reloads an enrolment by id (for attempts, which know their enrolment). */
+  async loadEnrollment(enrollmentId: string): Promise<LoadedEnrollment> {
+    const enrollment = await this.prisma.client.enrollment.findUniqueOrThrow({
+      where: { id: enrollmentId },
+      include: { course: { select: courseSelect } },
+    });
+    const { course, ...row } = enrollment;
+    return this.load(course, row);
+  }
+
+  private async loadContaining(
+    userId: string,
+    needle: string,
+    what: 'Lesson' | 'Assessment',
+  ): Promise<LoadedEnrollment> {
     const [match] = await this.prisma.client.$queryRaw<{ id: string }[]>`
       SELECT e.id
       FROM enrollments e
@@ -440,7 +587,7 @@ export class LearningService {
         JOIN course_versions v ON v.id = c.published_version_id
         WHERE c.status <> 'ARCHIVED'::course_status AND v.snapshot @> ${needle}::jsonb
         LIMIT 1`;
-      throw live ? notEnrolled() : notFound('Lesson');
+      throw live ? notEnrolled() : notFound(what);
     }
     const enrollment = await this.prisma.client.enrollment.findUniqueOrThrow({
       where: { id: match.id },

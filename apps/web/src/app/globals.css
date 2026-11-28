@@ -149,6 +149,7 @@
   --color-primary-fg: var(--brand-primary-fg);
   --color-secondary: var(--brand-secondary);
   --color-secondary-subtle: var(--brand-secondary-subtle);
+  --color-secondary-strong: var(--brand-secondary-strong);
   --color-canvas: var(--bg-canvas);
   --color-surface: var(--bg-surface);
   --color-surface-raised: var(--bg-surface-raised);

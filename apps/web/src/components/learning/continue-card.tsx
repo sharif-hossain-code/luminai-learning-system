@@ -2,13 +2,19 @@ import type { EnrolledCourse } from '@luminai/contracts';
 import { DomainArt } from '@/components/catalog/domain-art';
 import { ButtonLink } from '@/components/ui/button';
 import { formatDuration } from '@/lib/course-format';
-import { lessonHref } from '@/lib/learning';
+import { stepHref } from '@/lib/learning-links';
 import { ProgressBar } from './progress-bar';
 
 /** "Continue where you left off" (Dashboard.dc.html). */
 export function ContinueCard({ course }: { course: EnrolledCourse }) {
   const next = course.nextLesson!;
   const resuming = next.state === 'IN_PROGRESS' || course.progress.completedLessons > 0;
+  const quiz = next.kind === 'ASSESSMENT';
+  const place = quiz
+    ? next.moduleNumber
+      ? `Module ${next.moduleNumber} quiz`
+      : 'Final assessment'
+    : `Module ${next.moduleNumber}, lesson ${next.lessonNumber}`;
   return (
     <section
       aria-labelledby="continue-heading"
@@ -27,15 +33,15 @@ export function ContinueCard({ course }: { course: EnrolledCourse }) {
           {next.title}
         </h2>
         <p className="text-support text-fg-muted">
-          {course.title} · Module {next.moduleNumber}, lesson {next.lessonNumber}
+          {course.title} · {place}
           {course.progress.remainingMinutes > 0
             ? ` · about ${formatDuration(course.progress.remainingMinutes)} left in the course`
             : ''}
         </p>
         <ProgressBar percent={course.progress.percent} className="mt-1.5 max-w-[420px]" />
       </div>
-      <ButtonLink href={lessonHref(course.slug, next.id)} size="lg" className="px-7">
-        {resuming ? 'Resume lesson' : 'Start lesson'}
+      <ButtonLink href={stepHref(course.slug, next)} size="lg" className="px-7">
+        {quiz ? 'Open the quiz' : resuming ? 'Resume lesson' : 'Start lesson'}
       </ButtonLink>
     </section>
   );

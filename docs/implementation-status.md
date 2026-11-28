@@ -4,9 +4,9 @@ Last updated: 2026-11-28
 
 ## Current phase
 
-**Phase 4: enrolment and learning journey. Complete, pending review (stacked on the Phase 3 pull request).**
+**Phase 5: assessments. Complete, pending review.**
 
-Phases 1 to 3 are complete; their pull requests are not merged yet.
+Phases 1 to 4 are complete and merged.
 
 ## Phase 0: inspection (done)
 
@@ -177,7 +177,49 @@ Verified against local Postgres 16 and Redis 7, using the preinstalled Chromium 
 
 - The AI mentor panel beside the lesson arrives with Phase 6, so the lesson column is wider.
 - The dashboard's Up next, Weekly goal, Mentor suggestion and Recent achievement cards need data from later phases (assessments, practice, mentor), so they are not shown rather than invented.
-- The design's module quiz in the outline arrives with assessments (Phase 5).
+- The design's module quiz in the outline arrived with assessments (Phase 5).
+
+## Phase 5: assessments
+
+Designs: no quiz screens existed beyond the outline's "Module 2 quiz" item and the dashboard's "Up next" card, so every screen was drawn first in HTML in `designs/luminai-canvas/project/Assessment.dc.html` (outline, start page and its states, taking the quiz, results with AI feedback, dashboard Up next, studio curriculum and quiz editor), because of the Figma Starter limit (A33, A42: recreate in Figma). Decisions are in ADR-006; model, routes and rules in `docs/architecture/assessments.md`.
+
+| Gate item (requirements §14)                | Status | Where                                                                                                                          |
+| ------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Assessment and question editor              | Done   | Studio: quiz rows and "Add quiz" per module, final assessment, `/studio/courses/[id]/assessments/[id]`; `/admin/assessments/*` |
+| Learner assessment screen                   | Done   | `/learn/[slug]/quiz/[id]` start page; attempt page with autosave; outline items; dashboard Up next                             |
+| Attempt lifecycle                           | Done   | Start (one open attempt, attempt limit), autosave, submit (locked row, one transaction), pinned to the course version          |
+| Scoring and results                         | Done   | `grading.ts`; results page with score, pass mark, per-question review, answers revealed by feedback mode                       |
+| Rubric-based feedback for supported tasks   | Done   | Writing questions: per-criterion AI feedback bounded by the rubric, marked AI and not scored (mock provider until A6)          |
+| Course completion includes required quizzes | Done   | `buildJourney`; completion recomputed on submit                                                                                |
+
+### Gate tests
+
+| Required test                                    | Covered by (`apps/api/test/assessments.integration.spec.ts` unless noted)                                                                                                                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Answer keys never in learner response            | "answer keys never appear in learner responses before the review allows them" (catalogue, learning, start page, attempt, save, submit, up next scanned); "reveals answers and explanations once the learner passes"; "shows only the score in SCORE_ONLY mode"; e2e |
+| Attempt ownership enforced                       | "returns 404 for someone else's attempt on every attempt route"; "refuses learners who are not enrolled, and locked quizzes"; "rejects learners and other editors on every quiz authoring route"                                                                    |
+| Submitted attempt can't be changed improperly    | "autosaves answers, then refuses any change once submitted"; "lets exactly one of two concurrent submits through"; "opens one attempt at a time, even under concurrent starts"; "keeps an open attempt on the version it started with after a republish"            |
+| Score correct across question types              | "scores every question type and marks writing feedback as AI-generated"; "stops new attempts once the limit is used"; `apps/api/src/assessments/grading.spec.ts`                                                                                                    |
+| AI feedback clearly marked and bounded by rubric | "scores every question type and marks writing feedback as AI-generated"; `apps/api/src/assessments/writing-feedback.spec.ts` (unknown criteria dropped, rubric order kept, text clipped, notice and `generatedBy: 'AI'`)                                            |
+| End to end                                       | `apps/web/e2e/assessments.spec.ts`: editor adds a quiz with three question types in the studio and publishes; learner finishes the lesson, takes the quiz, passes, gets AI feedback, finishes the course                                                            |
+
+### Test results (local run, 2026-11-28)
+
+| Suite                                              | Result                                                                                                                     |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm format:check`, `pnpm lint`, `pnpm typecheck` | Pass                                                                                                                       |
+| `pnpm test` (unit)                                 | 96 pass (API 63, contracts 33)                                                                                             |
+| `pnpm test:integration`                            | 125 pass (database 10, API 115)                                                                                            |
+| `pnpm build`                                       | Web, API, contracts, database build                                                                                        |
+| `pnpm test:e2e` (desktop + mobile)                 | 44 pass, 2 skipped by design. The known flaky password-reset test (Phase 2) timed out in one full run and passed on re-run |
+
+Verified against local Postgres 16 and Redis 7, using the preinstalled Chromium (`PLAYWRIGHT_EXECUTABLE_PATH`). Screenshots (desktop and mobile, light and dark) are in the project files under `screenshots/phase-5/`.
+
+### Differences from the design
+
+- The dashboard design's "Due Sunday" chip is left out: courses have no due dates (A40).
+- Speaking practice in "Up next" arrives with the practice phase.
+- Writing feedback comes from the built-in practice checker until an AI provider is chosen (A6); the page says so.
 
 ## Known issues and debt
 
@@ -190,7 +232,8 @@ Verified against local Postgres 16 and Redis 7, using the preinstalled Chromium 
 - The password-reset e2e test occasionally times out under full-suite load (desktop and mobile seen) and passes on re-run; CI retries once. Worth a closer look.
 - Breached-password check and admin MFA are pre-production tasks (A18, A19).
 - No Dockerfiles yet: they depend on the hosting choice (assumption A5).
+- Writing feedback runs inside the submit request (15 s timeout). A real AI provider may need it moved to the worker (ADR-006).
 
 ## Next task
 
-**Phase 5, task 1:** assessments. The question editor in the studio, the learner assessment screen and the attempt lifecycle, with answer keys kept server-side. Course completion then also requires required assessments.
+**Phase 6, task 1:** the AI mentor. Choose the AI provider (A6), then replace the mock writing-feedback provider and add the mentor panel beside the lesson.

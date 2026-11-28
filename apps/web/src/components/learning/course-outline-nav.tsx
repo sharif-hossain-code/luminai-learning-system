@@ -1,7 +1,12 @@
-import type { LearnerModuleOutline, ProgressState } from '@luminai/contracts';
-import { Check, ChevronDown, Lock } from 'lucide-react';
+import type {
+  LearnerAssessmentOutline,
+  LearnerModuleOutline,
+  ProgressState,
+} from '@luminai/contracts';
+import { Check, ChevronDown, ClipboardCheck, ClipboardList, Lock } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
+import { assessmentHref, lessonHref } from '@/lib/learning-links';
 
 const MODULE_STATE: Record<ProgressState, string> = {
   COMPLETED: 'Completed',
@@ -33,15 +38,96 @@ function StateIcon({ state, current }: { state: ProgressState; current: boolean 
   );
 }
 
+/** Quiz items use a clipboard instead of the lesson circle (Assessment.dc.html, 1). */
+function QuizIcon({ state, current }: { state: ProgressState; current: boolean }) {
+  if (state === 'COMPLETED') {
+    return (
+      <ClipboardCheck
+        aria-hidden
+        className="mt-0.5 size-[18px] shrink-0 text-success-text"
+        strokeWidth={2.2}
+      />
+    );
+  }
+  return (
+    <ClipboardList
+      aria-hidden
+      className={cn(
+        'mt-0.5 size-[18px] shrink-0',
+        current || state === 'IN_PROGRESS' ? 'text-primary' : 'text-fg-subtle',
+      )}
+    />
+  );
+}
+
+function QuizItems({
+  assessments,
+  currentId,
+  courseSlug,
+}: {
+  assessments: LearnerAssessmentOutline[];
+  currentId: string;
+  courseSlug: string;
+}) {
+  return assessments.map((quiz) => {
+    const current = quiz.id === currentId;
+    if (quiz.locked) {
+      return (
+        <li key={quiz.id} className="flex gap-2.5 px-3 py-2.5 text-support text-fg-muted">
+          <Lock aria-hidden className="mt-0.5 size-[18px] shrink-0" />
+          <span>
+            {quiz.title}
+            <span className="sr-only">, quiz, locked</span>
+          </span>
+        </li>
+      );
+    }
+    const state =
+      quiz.state === 'COMPLETED'
+        ? ', passed'
+        : quiz.outOfAttempts
+          ? ', no attempts left'
+          : quiz.state === 'IN_PROGRESS'
+            ? ', not passed yet'
+            : '';
+    return (
+      <li key={quiz.id}>
+        <Link
+          href={assessmentHref(courseSlug, quiz.id)}
+          aria-current={current ? 'page' : undefined}
+          className={cn(
+            'flex gap-2.5 rounded-md px-3 py-2.5 text-support',
+            current
+              ? 'bg-primary-subtle font-semibold text-primary-strong'
+              : 'text-fg hover:bg-hover',
+          )}
+        >
+          <QuizIcon state={quiz.state} current={current} />
+          <span>
+            {quiz.title}
+            <span className="sr-only">, quiz{state}</span>
+            {!quiz.isRequired ? <span className="text-fg-muted"> · optional</span> : null}
+          </span>
+        </Link>
+      </li>
+    );
+  });
+}
+
 function OutlineList({
   modules,
-  currentLessonId,
-  hrefFor,
+  finalAssessments,
+  currentId,
+  courseSlug,
 }: {
   modules: LearnerModuleOutline[];
-  currentLessonId: string;
-  hrefFor: (lessonId: string) => string;
+  finalAssessments: LearnerAssessmentOutline[];
+  currentId: string;
+  courseSlug: string;
 }) {
+  const hrefFor = (lessonId: string) => lessonHref(courseSlug, lessonId);
+  const currentLessonId = currentId;
+  const finalsLocked = finalAssessments.every((quiz) => quiz.locked);
   return (
     <div className="flex flex-col gap-1">
       {modules.map((module, index) => (
@@ -101,9 +187,28 @@ function OutlineList({
                 </li>
               );
             })}
+            <QuizItems
+              assessments={module.assessments}
+              currentId={currentId}
+              courseSlug={courseSlug}
+            />
           </ul>
         </div>
       ))}
+      {finalAssessments.length ? (
+        <div className="flex flex-col gap-0.5">
+          <p className="px-3 pt-3 pb-2 text-overline font-semibold tracking-wider text-fg-muted uppercase">
+            Final assessment{finalsLocked ? ' · Locked' : ''}
+          </p>
+          <ul className="flex flex-col gap-0.5">
+            <QuizItems
+              assessments={finalAssessments}
+              currentId={currentId}
+              courseSlug={courseSlug}
+            />
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -114,16 +219,23 @@ function OutlineList({
  */
 export function CourseOutlineNav({
   modules,
-  currentLessonId,
+  finalAssessments,
+  currentId,
   courseSlug,
 }: {
   modules: LearnerModuleOutline[];
-  currentLessonId: string;
+  finalAssessments: LearnerAssessmentOutline[];
+  /** The lesson or quiz on screen. */
+  currentId: string;
   courseSlug: string;
 }) {
-  const hrefFor = (lessonId: string) => `/learn/${courseSlug}/${lessonId}`;
   const list = (
-    <OutlineList modules={modules} currentLessonId={currentLessonId} hrefFor={hrefFor} />
+    <OutlineList
+      modules={modules}
+      finalAssessments={finalAssessments}
+      currentId={currentId}
+      courseSlug={courseSlug}
+    />
   );
   return (
     <>
