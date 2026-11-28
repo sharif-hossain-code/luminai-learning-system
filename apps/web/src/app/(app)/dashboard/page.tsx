@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { ContinueCard } from '@/components/learning/continue-card';
 import { EnrolledCourseCard } from '@/components/learning/enrolled-course-card';
-import { getMyCourses } from '@/lib/learning';
+import { UpNextCard } from '@/components/learning/up-next-card';
+import { getMyCourses, getUpNext } from '@/lib/learning';
 import { getCurrentUser } from '@/lib/session';
 import { SuggestedCourses } from './suggested-courses';
 import { GoalsCard } from './welcome';
@@ -29,12 +30,16 @@ function today(timeZone: string): string {
 }
 
 /**
- * Learner dashboard (Dashboard.dc.html): continue learning, my courses, then
+ * Learner dashboard (Dashboard.dc.html): continue learning, up next quizzes, my courses, then
  * suggestions. Weekly goal, mentor and achievement cards arrive with the phases
  * that produce that data, so nothing here is invented.
  */
 async function Dashboard() {
-  const [user, courses] = await Promise.all([getCurrentUser(), getMyCourses().catch(() => null)]);
+  const [user, courses, upNext] = await Promise.all([
+    getCurrentUser(),
+    getMyCourses().catch(() => null),
+    getUpNext().catch(() => []),
+  ]);
   const firstName = user?.profile.displayName?.split(' ')[0];
   const enrolled = courses ?? [];
   // Same rule as GET /users/me/continue-learning: most recent unfinished course with a lesson to open.
@@ -58,6 +63,8 @@ async function Dashboard() {
       </div>
 
       {resume ? <ContinueCard course={resume} /> : null}
+
+      <UpNextCard items={upNext} />
 
       {enrolled.length ? (
         <section aria-labelledby="my-courses-heading" className="flex flex-col gap-4">

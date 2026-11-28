@@ -391,7 +391,7 @@ describe('answer keys', () => {
     const learner = await readyLearner(course, 'key-leak');
     const quiz = course.quizzes.m0!;
     const bodies: string[] = [];
-    const record = (response: { body: string }) => {
+    const record = <R extends { body: string }>(response: R): R => {
       bodies.push(response.body);
       return response;
     };

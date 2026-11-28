@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { ApiError } from '@/lib/api-client';
+import { stepHref } from '@/lib/learning-links';
 import { useLessonProgress } from './lesson-progress';
 
 /** The footer of a lesson: previous, completion and next, following the lesson's completion rule. */
@@ -22,7 +23,7 @@ export function LessonActions({
   type: LessonType;
   completionRule: CompletionRule;
   previousHref: string | null;
-  next: { href: string; title: string; locked: boolean } | null;
+  next: { kind: 'LESSON' | 'ASSESSMENT'; href: string; title: string; locked: boolean } | null;
   courseTitle: string;
   courseHref: string;
   courseSlug: string;
@@ -42,7 +43,7 @@ export function LessonActions({
       // Continue with the course's next lesson (it may be earlier, if something was skipped).
       const target = result.course.nextLesson;
       if (target && result.course.enrollmentStatus !== 'COMPLETED') {
-        router.push(`/learn/${courseSlug}/${target.id}`);
+        router.push(stepHref(courseSlug, target));
       } else {
         setPending(false);
       }
@@ -68,7 +69,9 @@ export function LessonActions({
           <h2 id="course-finished" className="text-h2 font-semibold">
             You finished the course
           </h2>
-          <p className="text-fg-muted">All required lessons in “{courseTitle}” are complete.</p>
+          <p className="text-fg-muted">
+            All required lessons and quizzes in “{courseTitle}” are complete.
+          </p>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href="/dashboard">Back to dashboard</ButtonLink>
             <ButtonLink href="/courses" variant="secondary">
@@ -107,7 +110,7 @@ export function LessonActions({
           </Button>
         ) : nextOpen ? (
           <ButtonLink href={next.href} variant={completed ? 'primary' : 'secondary'}>
-            Next lesson
+            {next.kind === 'ASSESSMENT' ? 'Take the quiz' : 'Next lesson'}
           </ButtonLink>
         ) : !next && completed && !finishedCourse ? (
           <ButtonLink href={courseHref} variant="secondary">

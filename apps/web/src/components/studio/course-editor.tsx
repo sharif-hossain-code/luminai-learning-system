@@ -4,6 +4,7 @@ import {
   courseVersionSummarySchema,
   COURSE_LEVELS,
   LESSON_TYPES as LESSON_TYPE_VALUES,
+  type AdminAssessment,
   type AdminCourse,
   type AdminModule,
   type FieldError,
@@ -16,6 +17,7 @@ import {
   ArrowLeft,
   ArrowUp,
   CheckCircle2,
+  ClipboardList,
   Eye,
   History,
   Pencil,
@@ -32,6 +34,7 @@ import { SelectField, TextField } from '@/components/ui/field';
 import { apiFetch } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { formatDuration, LESSON_TYPES, LEVEL_LABELS, plural } from '@/lib/course-format';
+import { QUESTION_TYPE_LABELS } from '@/lib/assessment-format';
 import { ChangesBadge, StatusBadge } from './status-badge';
 import { linesToList, useCourse, type Notice } from './use-course';
 
@@ -524,6 +527,94 @@ function issuesFor(issues: PublishIssue[], path: string) {
   return issues.filter((issue) => issue.path === path);
 }
 
+const quizHref = (course: AdminCourse, assessment: AdminAssessment) =>
+  `/studio/courses/${course.id}/assessments/${assessment.id}`;
+
+/** A quiz in the curriculum list (Assessment.dc.html, 6). */
+function QuizRow({ course, assessment }: { course: AdminCourse; assessment: AdminAssessment }) {
+  const issues = issuesFor(course.publishIssues, `assessment:${assessment.id}`);
+  const count = assessment.questions.length;
+  const types = new Set(assessment.questions.map((question) => question.type));
+  return (
+    <li className="flex items-center gap-3 border-b border-subtle bg-warning-subtle/30 py-2 pr-3 pl-4 last:border-b-0 sm:pl-[60px]">
+      <ClipboardList aria-hidden className="size-[18px] shrink-0 text-warning-text" />
+      <Link
+        href={quizHref(course, assessment)}
+        className="min-w-0 flex-1 truncate rounded-sm py-1.5 text-body hover:text-primary hover:underline hover:underline-offset-4"
+      >
+        {assessment.title}
+        <span className="sr-only">, quiz</span>
+      </Link>
+      {issues.length ? (
+        <span
+          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warning-subtle px-2 py-0.5 text-caption font-medium text-warning-text"
+          title={issues.map((issue) => issue.message).join('\n')}
+        >
+          <AlertCircle aria-hidden className="size-3.5" />
+          {plural(issues.length, 'issue')}
+        </span>
+      ) : null}
+      <span
+        className="hidden shrink-0 rounded-full bg-warning-subtle px-2.5 py-0.5 text-caption font-medium text-warning-text sm:inline"
+        title={[...types].map((type) => QUESTION_TYPE_LABELS[type]).join(', ')}
+      >
+        Quiz · {plural(count, 'question')}
+        {assessment.isRequired ? '' : ' · optional'}
+      </span>
+      <Link
+        href={quizHref(course, assessment)}
+        aria-label={`Edit ${assessment.title}`}
+        title={`Edit ${assessment.title}`}
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+      >
+        <Pencil aria-hidden className="size-4" />
+      </Link>
+    </li>
+  );
+}
+
+/** Adds a quiz (to a module, or a final assessment) and opens its editor. */
+function AddQuizButton({
+  course,
+  moduleId,
+  title,
+  label,
+  variant = 'ghost',
+  mutate,
+  busy,
+}: {
+  course: AdminCourse;
+  moduleId: string | null;
+  title: string;
+  label: string;
+  variant?: 'ghost' | 'secondary';
+  mutate: Mutate;
+  busy: string | null;
+}) {
+  const router = useRouter();
+  const key = `quiz-in:${moduleId ?? 'course'}`;
+  return (
+    <Button
+      variant={variant}
+      size="sm"
+      loading={busy === key}
+      disabled={busy !== null && busy !== key}
+      onClick={async () => {
+        const before = new Set(course.assessments.map((item) => item.id));
+        const next = await mutate(key, `/admin/courses/${course.id}/assessments`, {
+          method: 'POST',
+          body: { title, moduleId },
+        });
+        const created = next?.assessments.find((item) => !before.has(item.id));
+        if (created) router.push(quizHref(course, created));
+      }}
+    >
+      <Plus aria-hidden className="size-4" />
+      {label}
+    </Button>
+  );
+}
+
 function ModuleCard({
   course,
   module,
@@ -563,6 +654,7 @@ function ModuleCard({
   }
 
   const minutes = module.lessons.reduce((sum, lesson) => sum + lesson.estimatedMinutes, 0);
+  const quizzes = course.assessments.filter((assessment) => assessment.moduleId === module.id);
 
   return (
     <li className="rounded-lg border border-subtle bg-surface">
@@ -710,8 +802,11 @@ function ModuleCard({
             </li>
           );
         })}
+        {quizzes.map((assessment) => (
+          <QuizRow key={assessment.id} course={course} assessment={assessment} />
+        ))}
       </ol>
-      <div className="border-t border-subtle p-3 sm:pl-[60px]">
+      <div className="flex flex-wrap gap-2 border-t border-subtle p-3 sm:pl-[60px]">
         {adding ? (
           <InlineForm
             label={`New lesson in ${module.title}`}
@@ -732,13 +827,68 @@ function ModuleCard({
             }}
           />
         ) : (
-          <Button variant="ghost" size="sm" onClick={() => setAdding(true)}>
-            <Plus aria-hidden className="size-4" />
-            Add lesson
-          </Button>
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setAdding(true)}>
+              <Plus aria-hidden className="size-4" />
+              Add lesson
+            </Button>
+            <AddQuizButton
+              course={course}
+              moduleId={module.id}
+              title={`Module ${index + 1} quiz`}
+              label="Add quiz"
+              mutate={mutate}
+              busy={busy}
+            />
+          </>
         )}
       </div>
     </li>
+  );
+}
+
+function FinalAssessments({
+  course,
+  mutate,
+  busy,
+}: {
+  course: AdminCourse;
+  mutate: Mutate;
+  busy: string | null;
+}) {
+  const finals = course.assessments.filter((assessment) => assessment.moduleId === null);
+  return (
+    <section
+      aria-labelledby="final-assessment-heading"
+      className="mt-5 flex flex-col gap-3 rounded-lg border border-subtle p-4"
+    >
+      <div>
+        <h3 id="final-assessment-heading" className="text-body font-semibold">
+          Final assessment
+        </h3>
+        <p className="text-support text-fg-muted">
+          Optional. A course-level quiz learners take after the last module.
+        </p>
+      </div>
+      {finals.length ? (
+        <ul className="overflow-hidden rounded-md border border-subtle [&>li]:sm:pl-4">
+          {finals.map((assessment) => (
+            <QuizRow key={assessment.id} course={course} assessment={assessment} />
+          ))}
+        </ul>
+      ) : null}
+      <div>
+        <AddQuizButton
+          course={course}
+          moduleId={null}
+          title="Final assessment"
+          label="Add final assessment"
+          variant="secondary"
+          mutate={mutate}
+          busy={busy}
+        />
+      </div>
+    </section>
   );
 }
 
@@ -756,7 +906,7 @@ function Curriculum({
     <Card
       id="curriculum"
       title="Curriculum"
-      description="Modules and lessons, in the order learners take them. Open a lesson to write its content."
+      description="Modules, lessons and quizzes, in the order learners take them. Open a lesson or quiz to edit it."
     >
       {course.modules.length ? (
         <ol className="flex flex-col gap-3">
@@ -798,6 +948,7 @@ function Curriculum({
           </Button>
         )}
       </div>
+      <FinalAssessments course={course} mutate={mutate} busy={busy} />
     </Card>
   );
 }
@@ -807,6 +958,9 @@ function Curriculum({
 function issueHref(course: AdminCourse, issue: PublishIssue): string {
   if (issue.path.startsWith('lesson:')) {
     return `/studio/courses/${course.id}/lessons/${issue.path.slice('lesson:'.length)}`;
+  }
+  if (issue.path.startsWith('assessment:')) {
+    return `/studio/courses/${course.id}/assessments/${issue.path.slice('assessment:'.length)}`;
   }
   if (issue.path.startsWith('module:') || issue.path === 'course.modules') return '#curriculum';
   return '#details';

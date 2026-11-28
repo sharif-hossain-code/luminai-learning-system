@@ -1,70 +1,19 @@
 import type { LearnerCourse, LearnerLesson } from '@luminai/contracts';
-import { ArrowLeft, ExternalLink, FileText, Lock } from 'lucide-react';
+import { ExternalLink, FileText } from 'lucide-react';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { LessonContent } from '@/components/content/lesson-content';
-import { CourseOutlineNav } from '@/components/learning/course-outline-nav';
 import { LessonActions } from '@/components/learning/lesson-actions';
 import { LessonMedia } from '@/components/learning/lesson-media';
 import { LessonProgressProvider } from '@/components/learning/lesson-progress';
-import { ProgressBar } from '@/components/learning/progress-bar';
-import { ButtonLink } from '@/components/ui/button';
+import { LockedStep, PlayerFrame, PlayerLoading } from '@/components/learning/player-frame';
 import { formatDuration, LESSON_TYPES } from '@/lib/course-format';
-import { getLearnerCourse, getLesson, lessonHref } from '@/lib/learning';
+import { getLearnerCourse, getLesson, lessonHref, stepHref } from '@/lib/learning';
 
 type Params = Promise<{ slug: string; lessonId: string }>;
 
 export const metadata: Metadata = { title: 'Lesson' };
-
-/** Top bar from Lesson.dc.html: back to the dashboard, course and place, course progress. */
-function PlayerHeader({ course, place }: { course: LearnerCourse; place: string | null }) {
-  return (
-    <header className="flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 border-b border-subtle bg-surface px-4 py-3 sm:px-6">
-      <ButtonLink href="/dashboard" variant="secondary" size="sm">
-        <ArrowLeft aria-hidden className="size-4" />
-        Dashboard
-      </ButtonLink>
-      <div className="min-w-[200px] flex-1">
-        <Link
-          href={`/courses/${course.slug}`}
-          className="block rounded-sm text-body font-semibold hover:underline hover:underline-offset-4"
-        >
-          {course.title}
-        </Link>
-        {place ? <p className="text-caption text-fg-muted">{place}</p> : null}
-      </div>
-      <div className="flex items-center gap-2.5 text-caption text-fg-muted">
-        <ProgressBar percent={course.progress.percent} size="sm" className="w-40" />
-        <span>{course.progress.percent}% complete</span>
-      </div>
-    </header>
-  );
-}
-
-function LockedLesson({ course }: { course: LearnerCourse }) {
-  const blocking = course.modules.find(
-    (module) => module.state !== 'COMPLETED' && module.isRequired,
-  );
-  return (
-    <section className="flex max-w-[460px] flex-col items-start gap-4 rounded-lg border border-subtle bg-surface p-8">
-      <span className="flex size-12 items-center justify-center rounded-md bg-muted">
-        <Lock aria-hidden className="size-6 text-fg-muted" />
-      </span>
-      <h1 className="text-h1 font-semibold">This module is locked</h1>
-      <p className="text-fg-muted">
-        {blocking ? `Finish “${blocking.title}” to open it. ` : ''}Modules open in order so each one
-        builds on the last.
-      </p>
-      {course.nextLesson ? (
-        <ButtonLink href={lessonHref(course.slug, course.nextLesson.id)}>
-          Go to your next lesson
-        </ButtonLink>
-      ) : null}
-    </section>
-  );
-}
 
 function Resources({ lesson }: { lesson: LearnerLesson }) {
   const extra = lesson.resources.filter(
@@ -146,9 +95,7 @@ function LessonView({ course, lesson }: { course: LearnerCourse; lesson: Learner
             previousHref={
               lesson.previousLessonId ? lessonHref(course.slug, lesson.previousLessonId) : null
             }
-            next={
-              lesson.next ? { ...lesson.next, href: lessonHref(course.slug, lesson.next.id) } : null
-            }
+            next={lesson.next ? { ...lesson.next, href: stepHref(course.slug, lesson.next) } : null}
             courseTitle={course.title}
             courseHref={`/courses/${course.slug}`}
             courseSlug={course.slug}
@@ -180,42 +127,23 @@ async function Player({ params }: { params: Params }) {
   const lessonNumber = currentModule.lessons.findIndex((l) => l.id === lessonId) + 1;
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <PlayerHeader
-        course={course}
-        place={`Module ${moduleNumber} · Lesson ${lessonNumber} of ${currentModule.lessons.length}`}
-      />
-      <div className="flex flex-1 flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:items-start lg:gap-6">
-        <CourseOutlineNav
-          modules={course.modules}
-          currentLessonId={lessonId}
-          courseSlug={course.slug}
-        />
-        <main id="main-content" className="flex min-w-0 flex-1 justify-center">
-          <div className="flex w-full max-w-[880px] flex-col">
-            {lessonAccess.state === 'locked' ? (
-              <LockedLesson course={course} />
-            ) : (
-              <LessonView course={course} lesson={lessonAccess.lesson} />
-            )}
-          </div>
-        </main>
-      </div>
-    </div>
+    <PlayerFrame
+      course={course}
+      currentId={lessonId}
+      place={`Module ${moduleNumber} · Lesson ${lessonNumber} of ${currentModule.lessons.length}`}
+    >
+      {lessonAccess.state === 'locked' ? (
+        <LockedStep course={course} kind="lesson" />
+      ) : (
+        <LessonView course={course} lesson={lessonAccess.lesson} />
+      )}
+    </PlayerFrame>
   );
 }
 
 export default function LessonPage({ params }: { params: Params }) {
   return (
-    <Suspense
-      fallback={
-        <div role="status" className="flex min-h-dvh flex-col">
-          <span className="sr-only">Loading lesson…</span>
-          <div className="h-16 border-b border-subtle bg-surface" />
-          <div className="mx-auto mt-8 h-96 w-full max-w-[760px] animate-pulse rounded-lg bg-subtle" />
-        </div>
-      }
-    >
+    <Suspense fallback={<PlayerLoading label="Loading lesson…" />}>
       <Player params={params} />
     </Suspense>
   );
