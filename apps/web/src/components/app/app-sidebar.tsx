@@ -1,6 +1,6 @@
 'use client';
 
-import { Compass, LayoutGrid, LogOut, Menu, PenSquare, Settings, X } from 'lucide-react';
+import { BookOpen, Compass, LayoutGrid, LogOut, Menu, PenSquare, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useId, useState } from 'react';
@@ -10,10 +10,11 @@ import { apiFetch } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { initials, useCurrentUser } from './user-context';
 
-// My learning, practice, mentor and assessment pages join this list in later phases.
+// Practice, mentor and assessment pages join this list in later phases.
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { href: '/courses', label: 'Explore courses', icon: Compass },
+  { href: '/learning', label: 'My learning', icon: BookOpen },
 ];
 
 /** Shown to content editors and administrators only (the API enforces access). */
